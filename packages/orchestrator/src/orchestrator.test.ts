@@ -116,7 +116,8 @@ describe("runGraph", () => {
       },
     });
     expect(ran).toEqual(["a"]);
-    expect(outcomes.get("b") ?? undefined).toBeUndefined();
+    expect(outcomes.get("b")?.status).toBe("cancelled");
+    expect(outcomes.get("c2")?.status).toBe("cancelled");
   });
 
   it("rejects invalid graphs", async () => {

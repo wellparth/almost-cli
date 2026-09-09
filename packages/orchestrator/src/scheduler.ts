@@ -59,5 +59,9 @@ export async function runGraph(
     onProgress?.(outcomes);
   }
 
+  for (const id of cancelled) {
+    if (!outcomes.has(id)) outcomes.set(id, { id, status: "cancelled" });
+  }
+
   return { outcomes, ranTasks: ran };
 }

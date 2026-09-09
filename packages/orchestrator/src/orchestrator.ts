@@ -49,30 +49,38 @@ export class Orchestrator {
 
   async run(graph: TaskGraph): Promise<OrchestratorRunResult> {
     const runTask = async (task: TaskSpec): Promise<TaskOutcome> => {
-      await this.#bus.emit({
-        type: "TaskQueued",
-        sessionId: "",
-        task: {
-          id: task.id,
-          agentId: task.agentId,
-          input: task.input,
-          dependencies: task.dependencies,
-          status: "queued",
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        timestamp: Date.now(),
-      });
-
-      const sink: EventSink = async (event) => {
-        await this.#bus.emit({ ...event, sessionId: "" });
-        await this.#onEvent?.(event);
-      };
-
       try {
+        if (task.options?.providerId && task.options.providerId !== this.#provider.id) {
+          throw new Error(`provider ${task.options.providerId} is not available to this orchestrator`);
+        }
+
+        await this.#emit({
+          type: "TaskQueued",
+          sessionId: "",
+          task: {
+            id: task.id,
+            agentId: task.agentId,
+            input: task.input,
+            dependencies: task.dependencies,
+            status: "queued",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          timestamp: Date.now(),
+        });
+
+        const sink: EventSink = async (event) => {
+          await this.#emit({ ...event, sessionId: "" });
+          try {
+            await this.#onEvent?.(event);
+          } catch {
+            // A misbehaving external sink must not mark the task as failed.
+          }
+        };
+
         const result = await runAgentLoop({
           provider: this.#provider,
-          model: task.options?.model ?? this.#agent.defaultModelHint ?? this.#defaultModel(),
+          model: task.options?.model ?? this.#agent.defaultModelHint ?? "gpt-4o",
           agentId: task.agentId,
           executor: this.#executor,
           system: this.#agent.systemPrompt,
@@ -80,16 +88,17 @@ export class Orchestrator {
           onEvent: sink,
         });
         if (result.status === "failed") {
-          await this.#bus.emit({
+          const error = result.error ?? "agent failed";
+          await this.#emit({
             type: "TaskFailed",
             sessionId: "",
             taskId: task.id,
-            error: result.error ?? "agent failed",
+            error,
             timestamp: Date.now(),
           });
-          return { id: task.id, status: "failed", error: result.error ?? "agent failed" };
+          return { id: task.id, status: "failed", error };
         }
-        await this.#bus.emit({
+        await this.#emit({
           type: "TaskCompleted",
           sessionId: "",
           taskId: task.id,
@@ -103,7 +112,7 @@ export class Orchestrator {
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        await this.#bus.emit({
+        await this.#emit({
           type: "TaskFailed",
           sessionId: "",
           taskId: task.id,
@@ -121,8 +130,18 @@ export class Orchestrator {
     return { outcomes: scheduled.outcomes, ranTasks: scheduled.ranTasks };
   }
 
-  #defaultModel(): string {
-    return this.#agent.defaultModelHint ?? "gpt-4o";
+  /**
+   * Observers must never abort a run: a bus subscriber or onEvent sink that
+   * throws is downgraded to a failed task outcome, not a run failure.
+   */
+  async #emit(event: Parameters<EventBus["emit"]>[0]): Promise<void> {
+    try {
+      await this.#bus.emit(event);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const payload = { sessionId: "", timestamp: Date.now(), error: message };
+      await this.#onEvent?.({ type: "AgentFailed", agentId: "", ...payload });
+    }
   }
 }
 
