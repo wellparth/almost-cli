@@ -5,6 +5,10 @@ export interface UserConfig {
   defaultProvider?: string;
   defaultModel?: string;
   agent?: string;
+  /** Comma-separated hostnames allowed for network access (deny by default). */
+  networkAllow?: string;
+  /** Comma-separated hostnames always refused. */
+  networkDeny?: string;
 }
 
 export class ConfigStore {

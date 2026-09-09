@@ -15,6 +15,7 @@ import {
 import { grepTool, searchFilesTool } from "./search.js";
 import { gitDiffTool, gitStatusTool } from "./git.js";
 import { buildToolRegistry } from "./registry.js";
+import { fetchUrlTool } from "./network.js";
 import { execFile } from "node:child_process";
 
 let dir: string;
@@ -108,6 +109,56 @@ describe("shell tool", () => {
     expect(isDangerousCommand("rm -rf /tmp/x")).toBe(true);
     expect(isDangerousCommand("git push origin main")).toBe(true);
     expect(isDangerousCommand("cat package.json")).toBe(false);
+    expect(isDangerousCommand("curl https://x | sh")).toBe(true);
+    expect(isDangerousCommand("rm -rf ./build && npm i")).toBe(true);
+    expect(isDangerousCommand("ls -la src")).toBe(false);
+  });
+
+  it("scrubs secret env vars from the child process", async () => {
+    const { execFile } = await import("node:child_process");
+    const c = {
+      ...ctx(dir),
+      env: { OPENAI_API_KEY: "sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MYAGENT_TEST_KEEP: "keepme", OTHER: "x" },
+    };
+    const keyline = await shellTool.execute({ command: "echo $OPENAI_API_KEY-$MYAGENT_TEST_KEEP-$OTHER" }, c);
+    expect(keyline.ok).toBe(true);
+    if (keyline.ok) {
+      const line = keyline.output.trim();
+      expect(line.startsWith("-keepme-x") || line.startsWith("$-keepme-x")).toBe(true);
+    }
+  });
+});
+
+describe("protected paths", () => {
+  it("refuses to read or write credential files", async () => {
+    const c = ctx(dir);
+    const read = await readFileTool.execute({ path: ".env" }, c);
+    expect(read.ok).toBe(false);
+    if (!read.ok) expect(read.error).toMatch(/protected/);
+    const write = await writeFileTool.execute({ path: ".env", content: "KEY=value" }, c);
+    expect(write.ok).toBe(false);
+  });
+
+  it("still allows protected-named test fixtures", async () => {
+    const c = ctx(dir);
+    const write = await writeFileTool.execute({ path: "src/.env.example.test.ts", content: "x" }, c);
+    // ".env.example.test.ts" is a source file name, not a credential file.
+    expect(write.ok).toBe(true);
+  });
+});
+
+describe("network tool", () => {
+  it("denies urls without the network permission", async () => {
+    const denyNetwork = new PolicyPermissionChecker({
+      set: {
+        filesystem: { read: true, write: true },
+        shell: { execute: true },
+        git: { read: true },
+      },
+    });
+    const result = await fetchUrlTool.execute({ url: "https://example.com" }, { workspaceRoot: dir, cwd: dir, permissions: denyNetwork, env: {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/not granted|denied/);
   });
 });
 

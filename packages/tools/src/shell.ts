@@ -1,5 +1,6 @@
 import { exec } from "node:child_process";
 import type { AgentTool, ToolContext, ToolResult } from "@almost/agent-core";
+import { sanitizeEnv } from "@almost/security";
 import { denied } from "./result.js";
 
 const DANGEROUS_PATTERNS = [
@@ -9,24 +10,39 @@ const DANGEROUS_PATTERNS = [
   /\bsudo\b/,
   /\bgit\s+push\b/,
   /\bgit\s+commit\b.*--amend/,
+  /\bgit\s+push\b.*(--force|-f\b)/,
+  /\bmv\s+.*\s+\/(?:etc|bin|sbin|usr|lib)\b/,
+  /\bchmod\s+(-R\s+)?777\b/,
+  /\bchown\s+-R\b/,
   /\b>+\s*\/dev\/sd/,
   /\bdd\s+if=/,
-  /\b:n?wq!?/,
   /\bmkfs\b/,
+  /\b:wq!?\b/,
+  /\b:q!/,
   /\bshutdown\b/,
   /\breboot\b/,
   /\bsh\s+-c\b/,
   /\bbash\s+-c\b/,
+  /\bzsh\s+-c\b/,
   /\beval\b/,
   /\bcurl\b[^\n]*\|\s*(sh|bash)\b/,
+  /\bcurl\b[^\n]*\|\s*(sh|bash)\s*$/m,
   /\bwget\b[^\n]*\|\s*(sh|bash)\b/,
+  /\bbase64\s+-[dl]\b/i,
+  /\biptables\b/,
+  /\bufw\s+(enable|allow|deny)\b/,
+  /\bpoweroff\b/,
+  /\bsystemctl\b/,
+  /\bnc\s+/,
+  /\bsocat\b/,
   /`/,
   /\$\(/,
+  /\|\s*sh\s*(;|$)/,
 ];
 
 /**
  * Best-effort guard against obviously destructive commands. This is NOT the
- * primary security boundary: shell.write is not granted by default and shell
+ * primary security boundary: shell.execute is not granted by default and shell
  * execution is routed through the permission engine (and typically approval).
  */
 export function isDangerousCommand(command: string): boolean {
@@ -39,11 +55,14 @@ export function runShellCommand(
   options?: { timeoutMs?: number },
 ): Promise<ToolResult> {
   return new Promise((resolvePromise) => {
+    const baseEnv = { ...process.env, ...ctx.env };
     exec(
       command,
       {
         cwd: ctx.cwd,
-        env: { ...process.env, ...ctx.env },
+        // Never pass secret-bearing environment variables to the child process
+        // (e.g. API keys) to limit exfiltration via shell commands.
+        env: sanitizeEnv(baseEnv as Record<string, string>),
         timeout: options?.timeoutMs ?? 60_000,
         maxBuffer: 8 * 1024 * 1024,
       },
