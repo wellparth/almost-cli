@@ -1,0 +1,12 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  - 'packages/tools/*'
+  - 'packages/providers/*'
+  - 'agents/*'
+  - 'docs'
+  - 'examples'
+  - 'tests'
+
+allowBuilds:
+  esbuild: true
