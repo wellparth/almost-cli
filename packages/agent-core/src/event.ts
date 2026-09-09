@@ -1,3 +1,4 @@
+import type { Permission } from "./tool.js";
 import type { AgentTask } from "./task.js";
 
 export type AgentEvent =
@@ -6,7 +7,7 @@ export type AgentEvent =
   | { type: "AgentThinking"; sessionId: string; agentId: string; timestamp: number }
   | { type: "ToolRequested"; sessionId: string; agentId: string; tool: string; input: unknown; timestamp: number }
   | { type: "ToolExecuted"; sessionId: string; agentId: string; tool: string; ok: boolean; timestamp: number }
-  | { type: "PermissionRequested"; sessionId: string; agentId: string; permission: string; timestamp: number }
+  | { type: "PermissionRequested"; sessionId: string; agentId: string; permission: Permission; timestamp: number }
   | { type: "AgentCompleted"; sessionId: string; agentId: string; timestamp: number }
   | { type: "AgentFailed"; sessionId: string; agentId: string; error: string; timestamp: number }
   | { type: "TaskQueued"; sessionId: string; task: AgentTask; timestamp: number }

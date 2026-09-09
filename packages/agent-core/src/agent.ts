@@ -51,7 +51,7 @@ export interface AgentRunRequest {
 }
 
 export interface AgentRunResult {
-  status: "completed" | "failed" | "needs_approval" | "cancelled";
+  status: "completed" | "failed" | "waiting_for_approval" | "cancelled";
   output?: unknown;
   error?: string;
   iterations: number;

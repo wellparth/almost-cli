@@ -37,7 +37,7 @@ export type ModelEvent =
   | { type: "TOOL_CALL"; id: string; name: string; input: unknown }
   | { type: "TOOL_RESULT"; id: string; result: ToolResult }
   | { type: "USAGE"; usage: Usage; model: string }
-  | { type: "FINISH"; stopReason: string }
+  | { type: "FINISH"; stopReason: StopReason }
   | { type: "ERROR"; message: string };
 
 export type StopReason = "stop" | "tool_calls" | "length" | "content_filter" | "error";

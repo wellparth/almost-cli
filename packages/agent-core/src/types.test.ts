@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentTask, Message, ModelEvent, Permission } from "../src/index.js";
+import type { AgentTask, Message, ModelEvent, Permission } from "./index.js";
 
 describe("core types", () => {
   it("AgentTask covers the statuses from the plan", () => {

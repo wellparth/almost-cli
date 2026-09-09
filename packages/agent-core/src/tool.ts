@@ -1,4 +1,4 @@
-import type { ToolResult } from "./provider.js";
+import type { ToolDefinition, ToolResult } from "./provider.js";
 
 /**
  * Permission strings represent every capability a tool or agent can request.
@@ -48,6 +48,6 @@ export interface AgentTool {
   execute(input: unknown, context: ToolContext): Promise<ToolResult>;
 }
 
-export function toToolDefinition(tool: AgentTool) {
+export function toToolDefinition(tool: AgentTool): ToolDefinition {
   return { name: tool.name, description: tool.description, inputSchema: tool.inputSchema };
 }
