@@ -35,9 +35,9 @@ Concurrent execution, resource locks (keyed FIFO mutex), git-worktree task isola
 
 `agent create`/`list`/`show`/`remove`, serializable agent definitions (prompts, models, tools, permissions) persisted under `MYAGENT_HOME/agents` and loaded by the runner. (`@almost/agents` registry, CLI; PR #24; issue #8)
 
-## Phase 8 — MCP
+## Phase 8 — MCP ✅
 
-MCP client, server config, tool discovery, permissions, lifecycle. (issue #9)
+Hand-rolled JSON-RPC 2.0 stdio MCP client (Content-Length framing, initialize handshake, tool discovery/calling), `mcp.json` server config, multi-server manager with permission-gated tools (deny by default), CLI `mcp add`/`list`/`remove`/`test`. (`@almost/mcp`, `apps/cli`; PR #25; issue #9)
 
 ## Phase 9 — Security Hardening
 
