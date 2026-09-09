@@ -1,0 +1,34 @@
+{
+  "name": "@almost/agent-runtime",
+  "version": "0.1.0",
+  "description": "Single-agent loop with streaming and tool execution",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@almost/agent-core": "workspace:*",
+    "@almost/providers-core": "workspace:*",
+    "@almost/storage": "workspace:*",
+    "@almost/tools": "workspace:*",
+    "@almost/permissions": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}
