@@ -12,6 +12,7 @@ export type AgentEvent =
   | { type: "AgentFailed"; sessionId: string; agentId: string; error: string; timestamp: number }
   | { type: "TaskQueued"; sessionId: string; task: AgentTask; timestamp: number }
   | { type: "TaskCompleted"; sessionId: string; taskId: string; timestamp: number }
-  | { type: "TaskFailed"; sessionId: string; taskId: string; error: string; timestamp: number };
+  | { type: "TaskFailed"; sessionId: string; taskId: string; error: string; timestamp: number }
+  | { type: "SecurityWarning"; sessionId: string; category: string; detail: string; timestamp: number };
 
 export type EventSink = (event: AgentEvent) => void | Promise<void>;

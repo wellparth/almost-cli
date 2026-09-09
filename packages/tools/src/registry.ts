@@ -9,6 +9,7 @@ import {
 } from "./filesystem.js";
 import { grepTool, searchFilesTool } from "./search.js";
 import { shellTool } from "./shell.js";
+import { fetchUrlTool } from "./network.js";
 import { gitBranchTool, gitDiffTool, gitLogTool, gitStatusTool } from "./git.js";
 
 export const BUILTIN_TOOLS: AgentTool[] = [
@@ -20,6 +21,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
   searchFilesTool,
   grepTool,
   shellTool,
+  fetchUrlTool,
   gitStatusTool,
   gitDiffTool,
   gitLogTool,

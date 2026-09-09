@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, readdir, rm, writeFile, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { AgentTool, ToolContext, ToolResult } from "@almost/agent-core";
+import { isProtectedPath } from "@almost/security";
 import { WorkspaceEscapeError, denied } from "./result.js";
 
 async function hasAccess(path: string): Promise<boolean> {
@@ -25,6 +26,19 @@ function resolvePath(ctx: ToolContext, requested: string): string {
   return target;
 }
 
+// Credential files (".env", keys, credential stores, ~/.myagent) never enter
+// model context and cannot be modified by tools. Applies to read/write/edit/delete.
+function protectedPathError(ctx: ToolContext, requested: string): string | undefined {
+  const root = resolve(ctx.workspaceRoot);
+  const target = requested ? resolve(ctx.cwd, requested) : root;
+  if (!within(root, target)) return undefined;
+  const rel = relative(root, target);
+  if (isProtectedPath(rel)) {
+    return `path is protected (holds credentials): ${rel}`;
+  }
+  return undefined;
+}
+
 export const readFileTool: AgentTool = {
   name: "read_file",
   description: "Read the full contents of a file at the given path.",
@@ -42,6 +56,8 @@ export const readFileTool: AgentTool = {
     if (!path) return { ok: false, error: "missing 'path'" };
     const decision = await ctx.permissions.check("filesystem.read", path);
     if (decision.verdict !== "allowed") return denied(decision);
+    const blocked = protectedPathError(ctx, path);
+    if (blocked) return { ok: false, error: blocked };
     const full = resolvePath(ctx, path);
     if (!(await hasAccess(full))) return { ok: false, error: `no such file: ${path}` };
     const content = await readFile(full, "utf8");
@@ -67,6 +83,8 @@ export const writeFileTool: AgentTool = {
     if (!path || typeof content !== "string") return { ok: false, error: "missing 'path' or 'content'" };
     const decision = await ctx.permissions.check("filesystem.write", path);
     if (decision.verdict !== "allowed") return denied(decision);
+    const blocked = protectedPathError(ctx, path);
+    if (blocked) return { ok: false, error: blocked };
     const full = resolvePath(ctx, path);
     await mkdir(dirname(full), { recursive: true });
     await writeFile(full, content, "utf8");
@@ -100,6 +118,8 @@ export const editFileTool: AgentTool = {
     if (oldString.length === 0) return { ok: false, error: "'oldString' must not be empty" };
     const decision = await ctx.permissions.check("filesystem.write", path);
     if (decision.verdict !== "allowed") return denied(decision);
+    const blocked = protectedPathError(ctx, path);
+    if (blocked) return { ok: false, error: blocked };
     const full = resolvePath(ctx, path);
     if (!(await hasAccess(full))) return { ok: false, error: `no such file: ${path}` };
     const current = await readFile(full, "utf8");
@@ -133,6 +153,8 @@ export const deleteFileTool: AgentTool = {
     if (!path) return { ok: false, error: "missing 'path'" };
     const decision = await ctx.permissions.check("filesystem.delete", path);
     if (decision.verdict !== "allowed") return denied(decision);
+    const blocked = protectedPathError(ctx, path);
+    if (blocked) return { ok: false, error: blocked };
     const full = resolvePath(ctx, path);
     const s = await stat(full);
     if (s.isDirectory()) return { ok: false, error: "delete_file does not remove directories" };
