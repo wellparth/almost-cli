@@ -62,8 +62,12 @@ export class PolicyPermissionChecker implements PermissionChecker {
       if (!this.#handler) {
         return { verdict: "requires_approval" };
       }
-      const granted = await this.#handler(permission, detail);
-      return granted ? { verdict: "allowed" } : { verdict: "denied", reason: "approval declined" };
+      try {
+        const granted = await this.#handler(permission, detail);
+        return granted ? { verdict: "allowed" } : { verdict: "denied", reason: "approval declined" };
+      } catch (error) {
+        return { verdict: "denied", reason: `approval handler failed: ${String(error)}` };
+      }
     }
     return { verdict: "allowed" };
   }
