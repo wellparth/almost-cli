@@ -96,6 +96,7 @@ export function startRepl(runner: Runner, persistence?: SessionPersistence): voi
 
   rl.on("close", () => {
     process.stdout.write("\n");
+    void runner.mcp?.closeAll().catch(() => undefined);
     process.exit(0);
   });
 }

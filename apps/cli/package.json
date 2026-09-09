@@ -17,6 +17,7 @@
     "@almost/agent-core": "workspace:*",
     "@almost/agent-runtime": "workspace:*",
     "@almost/agents": "workspace:*",
+    "@almost/mcp": "workspace:*",
     "@almost/permissions": "workspace:*",
     "@almost/providers": "workspace:*",
     "@almost/storage": "workspace:*",

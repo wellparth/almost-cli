@@ -6,6 +6,7 @@ import type { Permission, PermissionSet } from "@almost/agent-core";
 import { ToolExecutor } from "@almost/agent-runtime";
 import type { AppState } from "@almost/storage";
 import type { ModelProvider } from "@almost/agent-core";
+import { McpManager, loadMcpConfig } from "@almost/mcp";
 import path from "node:path";
 import { askApproval } from "./approvals.js";
 
@@ -14,9 +15,11 @@ export interface Runner {
   model: string;
   agent: AgentDefinition;
   executor: ToolExecutor;
+  /** Connected MCP servers (call closeAll() when the run finishes). */
+  mcp?: McpManager;
 }
 
-const REQUIRES_APPROVAL: Permission[] = ["shell.execute", "git.write", "filesystem.delete"];
+const REQUIRES_APPROVAL: Permission[] = ["shell.execute", "git.write", "filesystem.delete", "mcp"];
 
 export interface RunnerOptions {
   state: AppState;
@@ -84,8 +87,16 @@ export async function buildRunner(options: RunnerOptions): Promise<Runner> {
     onApprovalRequested: async (permission, detail) => askApproval(permission, detail),
   });
 
+  const config = await loadMcpConfig(state.paths.root);
+  const mcp = new McpManager(config, {
+    onLog: (server, line) => process.stderr.write(`[mcp:${server}] ${line}\n`),
+  });
+  if (mcp.hasServers) {
+    await mcp.connectAll();
+  }
+
   const executor = new ToolExecutor({
-    tools: agent.tools,
+    tools: [...agent.tools, ...mcp.agentTools],
     context: {
       workspaceRoot: process.cwd(),
       cwd: process.cwd(),
@@ -94,7 +105,7 @@ export async function buildRunner(options: RunnerOptions): Promise<Runner> {
     },
   });
 
-  return { provider, model, agent, executor };
+  return { provider, model, agent, executor, mcp: mcp.hasServers ? mcp : undefined };
 }
 
 const AUTH_ENV_NAMES: Record<string, string[]> = {

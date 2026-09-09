@@ -5,6 +5,7 @@ import { executeRun, persistTurn, startRepl } from "./repl.js";
 import { buildRunner, listModelsFor, resolveProvider } from "./runner.js";
 import { openPersistence } from "./persistence.js";
 import { agentCommand } from "./agent-commands.js";
+import { mcpCommand } from "./mcp-commands.js";
 import type { Runner } from "./runner.js";
 import type { AppState } from "@almost/storage";
 import path from "node:path";
@@ -21,6 +22,10 @@ Commands:
   agent show <id>              show an agent definition
   agent create <id> ...        create a custom agent
   agent remove <id>            remove a custom agent
+  mcp list                     list configured MCP servers
+  mcp add <name> <cmd> [args]  configure an MCP server (stdio transport)
+  mcp remove <name>            remove an MCP server config
+  mcp test <name>              connect to a server and list its tools
   auth list                    list configured credentials (names only)
   auth set <env-var-name>      store a key from an env var for the matching provider
   auth remove <env-var-name>   remove a stored credential
@@ -59,6 +64,8 @@ export async function cli(argv: string[]): Promise<number> {
   if (cmd === "auth") return authCommand(rest);
 
   if (cmd === "agent") return agentCommand(rest, await openStorage());
+
+  if (cmd === "mcp") return mcpCommand(rest, await openStorage());
 
   if (cmd === "models") return modelsCommand(rest);
 
@@ -245,6 +252,7 @@ async function runOnce(input: string, providerId?: string, model?: string): Prom
   const result = await executeRun({ runner, input, onEvent: persistence.sink });
   process.stdout.write("\n");
   await persistTurn(persistence.store, persistence.sessionId, runner, input, result);
+  await runner.mcp?.closeAll().catch(() => undefined);
   if (result.status === "completed") {
     process.stdout.write(`\n✔ done (${result.iterations} iterations)\n`);
     if (process.env.MYAGENT_VISIBLE_REASONING === "1" && result.reasoning) {
