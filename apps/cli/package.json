@@ -1,0 +1,31 @@
+{
+  "name": "almost-cli",
+  "version": "0.1.0",
+  "description": "myagent: BYOK multi-agent coding CLI",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "myagent": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@almost/agent-core": "workspace:*",
+    "@almost/agent-runtime": "workspace:*",
+    "@almost/agents": "workspace:*",
+    "@almost/permissions": "workspace:*",
+    "@almost/providers": "workspace:*",
+    "@almost/storage": "workspace:*",
+    "@almost/tools": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}
