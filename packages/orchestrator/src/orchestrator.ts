@@ -14,6 +14,10 @@ export interface OrchestratorOptions {
   concurrency?: number;
   bus?: EventBus;
   onEvent?: EventSink;
+  /** Per-task workspace root (e.g. task's git worktree). When set, the task
+   * runs with a tool executor scoped to that root; otherwise tasks share the
+   * executor's workspace. */
+  workspaceFor?: (task: TaskSpec) => string | undefined | Promise<string | undefined>;
 }
 
 export interface OrchestratorRunResult {
@@ -33,6 +37,7 @@ export class Orchestrator {
   readonly #concurrency: number;
   readonly #bus: EventBus;
   readonly #onEvent?: EventSink;
+  readonly #workspaceFor?: (task: TaskSpec) => string | undefined | Promise<string | undefined>;
 
   constructor(options: OrchestratorOptions) {
     this.#provider = options.provider;
@@ -41,6 +46,7 @@ export class Orchestrator {
     this.#concurrency = options.concurrency ?? 1;
     this.#bus = options.bus ?? new EventBus();
     this.#onEvent = options.onEvent;
+    this.#workspaceFor = options.workspaceFor;
   }
 
   get bus(): EventBus {
@@ -49,6 +55,8 @@ export class Orchestrator {
 
   async run(graph: TaskGraph): Promise<OrchestratorRunResult> {
     const runTask = async (task: TaskSpec): Promise<TaskOutcome> => {
+      const workspace = await this.#workspaceFor?.(task);
+      const executor = workspace === undefined ? this.#executor : this.#executor.scoped(workspace);
       try {
         if (task.options?.providerId && task.options.providerId !== this.#provider.id) {
           throw new Error(`provider ${task.options.providerId} is not available to this orchestrator`);
@@ -82,7 +90,7 @@ export class Orchestrator {
           provider: this.#provider,
           model: task.options?.model ?? this.#agent.defaultModelHint ?? "gpt-4o",
           agentId: task.agentId,
-          executor: this.#executor,
+          executor,
           system: this.#agent.systemPrompt,
           input: task.input,
           onEvent: sink,

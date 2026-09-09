@@ -50,6 +50,27 @@ export class ToolExecutor {
     return [...this.#tools.values()].map(toToolDefinition);
   }
 
+  /** The tools this executor was built with. */
+  get tools(): AgentTool[] {
+    return [...this.#tools.values()];
+  }
+
+  /**
+   * A clone bound to a different workspace root (e.g. a per-task git
+   * worktree). Permission decisions are shared with the original executor so
+   * approvals/denials stay consistent across cases.
+   */
+  scoped(workspaceRoot: string, cwd?: string): ToolExecutor {
+    return new ToolExecutor({
+      tools: this.tools,
+      context: {
+        ...this.#context,
+        workspaceRoot,
+        cwd: cwd ?? workspaceRoot,
+      },
+    });
+  }
+
   /**
    * Primary permission required by a tool. Unknown tools register as
    * `undefined` so the loop fails closed instead of guessing permissions.
