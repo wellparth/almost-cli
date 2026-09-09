@@ -31,9 +31,9 @@ Task graph, dependency resolver, scheduler, event bus, task outcomes and failure
 
 Concurrent execution, resource locks (keyed FIFO mutex), git-worktree task isolation with per-task tool scope, conflict detection across tasks. (`@almost/orchestrator` parallel module; PR #23; issue #7)
 
-## Phase 7 — Custom Agents
+## Phase 7 — Custom Agents ✅
 
-`agent create`, custom prompts/models/tools/permissions. (issue #8)
+`agent create`/`list`/`show`/`remove`, serializable agent definitions (prompts, models, tools, permissions) persisted under `MYAGENT_HOME/agents` and loaded by the runner. (`@almost/agents` registry, CLI; PR #24; issue #8)
 
 ## Phase 8 — MCP
 
