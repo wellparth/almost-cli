@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
@@ -7,7 +7,12 @@ export async function atomicWrite(path: string, content: string, mode?: number):
   const tmp = `${path}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
   await writeFile(tmp, content, "utf8");
   if (mode !== undefined) await chmod(tmp, mode);
-  await rename(tmp, path);
+  try {
+    await rename(tmp, path);
+  } catch (error) {
+    await unlink(tmp).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function readJson<T>(path: string, fallback: T): Promise<T> {

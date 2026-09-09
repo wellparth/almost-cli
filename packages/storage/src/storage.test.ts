@@ -55,6 +55,21 @@ describe("DiskSessionStore", () => {
     const store = new DiskSessionStore(paths.sessionsDir);
     await expect(store.appendMessage("../x", makeMessage("m"))).rejects.toThrow("invalid session id");
   });
+
+  it("serializes concurrent appends without corrupting the log", async () => {
+    const store = new DiskSessionStore(paths.sessionsDir);
+    const session = await store.create({ cwd: root });
+    const batches = 10;
+    for (let b = 0; b < batches; b++) {
+      await Promise.all(
+        Array.from({ length: 20 }, (_, i) =>
+          store.appendMessage(session.metadata.id, makeMessage(`m-${b}-${i}`)),
+        ),
+      );
+    }
+    const loaded = await store.load(session.metadata.id);
+    expect(loaded?.messages.length).toBe(batches * 20);
+  });
 });
 
 describe("ConfigStore", () => {

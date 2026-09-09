@@ -38,7 +38,7 @@ export class DiskSessionStore implements SessionStore {
   }
 
   async load(id: string): Promise<Session | undefined> {
-    const dir = this.resolve(dirForIdSafe(id));
+    const dir = this.#sessionDir(id);
     const metadata = await readJson<SessionMetadata | null>(join(dir, "metadata.json"), null);
     if (!metadata) return undefined;
     const messages = (await this.readLines(join(dir, "messages.jsonl"))) as AgentMessage[];
@@ -66,19 +66,19 @@ export class DiskSessionStore implements SessionStore {
   }
 
   async appendMessage(sessionId: string, message: AgentMessage): Promise<void> {
-    const dir = this.resolve(dirForIdSafe(sessionId));
+    const dir = this.#sessionDir(sessionId);
     await this.appendLine(join(dir, "messages.jsonl"), JSON.stringify(message));
     await this.touch(sessionId);
   }
 
   async appendEvent(sessionId: string, event: AgentEvent): Promise<void> {
-    const dir = this.resolve(dirForIdSafe(sessionId));
+    const dir = this.#sessionDir(sessionId);
     await this.appendLine(join(dir, "events.jsonl"), JSON.stringify(event));
     await this.touch(sessionId);
   }
 
   async touch(sessionId: string): Promise<void> {
-    const dir = this.resolve(dirForIdSafe(sessionId));
+    const dir = this.#sessionDir(sessionId);
     const metadata = await readJson<SessionMetadata | null>(join(dir, "metadata.json"), null);
     if (!metadata) return;
     metadata.updatedAt = Date.now();
@@ -86,11 +86,19 @@ export class DiskSessionStore implements SessionStore {
   }
 
   async remove(sessionId: string): Promise<void> {
-    await unlink(join(this.resolve(dirForIdSafe(sessionId)), "metadata.json"));
+    await unlink(join(this.#sessionDir(sessionId), "metadata.json"));
   }
 
-  resolve(dir: string): string {
-    return join(this.#sessionsDir, dir);
+  #sessionDir(id: string): string {
+    return join(this.#sessionsDir, dirForIdSafe(id));
+  }
+
+  #appendQueue: Promise<unknown> = Promise.resolve();
+
+  enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.#appendQueue.then(task, task);
+    this.#appendQueue = run.then(() => undefined, () => undefined);
+    return run;
   }
 
   async readLines(path: string): Promise<unknown[]> {
@@ -107,8 +115,10 @@ export class DiskSessionStore implements SessionStore {
   }
 
   async appendLine(path: string, line: string): Promise<void> {
-    await mkdir(this.#sessionsDir, { recursive: true });
-    await appendFile(path, line + "\n", "utf8");
+    await this.enqueue(async () => {
+      await mkdir(this.#sessionsDir, { recursive: true });
+      await appendFile(path, line + "\n", "utf8");
+    });
   }
 }
 
