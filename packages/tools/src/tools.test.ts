@@ -14,6 +14,7 @@ import {
 } from "./filesystem.js";
 import { grepTool, searchFilesTool } from "./search.js";
 import { gitDiffTool, gitStatusTool } from "./git.js";
+import { buildToolRegistry } from "./registry.js";
 import { execFile } from "node:child_process";
 
 let dir: string;
@@ -68,12 +69,18 @@ describe("filesystem tools", () => {
   });
 
   it("blocks paths that escape the workspace", async () => {
+    const registry = buildToolRegistry();
+    const wrappedRead = registry.get("read_file");
+    const wrappedWrite = registry.get("write_file");
+    const wrappedDelete = registry.get("delete_file");
+    if (!wrappedRead || !wrappedWrite || !wrappedDelete) throw new Error("missing tool");
+
     const c = ctx(dir);
-    const read = await readFileTool.execute({ path: "../outside.txt" }, c);
+    const read = await wrappedRead.execute({ path: "../outside.txt" }, c);
     expect(read.ok).toBe(false);
-    const write = await writeFileTool.execute({ path: "/tmp/almost-escape.txt", content: "x" }, c);
+    const write = await wrappedWrite.execute({ path: "/tmp/almost-escape.txt", content: "x" }, c);
     expect(write.ok).toBe(false);
-    const del = await deleteFileTool.execute({ path: "/tmp/whatever" }, c);
+    const del = await wrappedDelete.execute({ path: "/tmp/whatever" }, c);
     expect(del.ok).toBe(false);
   });
 });
