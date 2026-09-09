@@ -27,9 +27,9 @@ Built-in coding agent definition: system prompt, tool set, permission defaults, 
 
 Task graph, dependency resolver, scheduler, event bus, task outcomes and failure handling (failures cancel descendants). (`@almost/orchestrator`; PR #22; issue #6)
 
-## Phase 6 — Parallel Agents
+## Phase 6 — Parallel Agents ✅
 
-Concurrent execution, resource locks, task isolation, agent worktrees, conflict detection. (issue #7)
+Concurrent execution, resource locks (keyed FIFO mutex), git-worktree task isolation with per-task tool scope, conflict detection across tasks. (`@almost/orchestrator` parallel module; PR #23; issue #7)
 
 ## Phase 7 — Custom Agents
 
