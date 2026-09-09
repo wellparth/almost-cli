@@ -49,12 +49,12 @@ describe("AgentRegistry", () => {
     expect(agent.tools[0]?.name).toBe("read_file");
   });
 
-  it("get() prefers user agents and falls back to built-ins", async () => {
+  it("get() falls back from built-ins to user agents", async () => {
     const dir = await tmpDir();
     const registry = new AgentRegistry({ agentsDir: dir });
     await registry.create(serialized());
-    expect(await registry.get("tester")).toBeDefined();
     expect((await registry.get("coding")).id).toBe("coding");
+    expect((await registry.get("tester")).id).toBe("tester");
     await expect(registry.get("ghost")).rejects.toThrow(/unknown agent 'ghost'/);
   });
 
@@ -89,6 +89,20 @@ describe("AgentRegistry", () => {
     const registry = new AgentRegistry({ agentsDir: dir });
     await expect(registry.create(serialized({ id: "../evil" }))).rejects.toThrow(/invalid agent/);
     await expect(registry.create(serialized({ tools: ["unknown_tool"] }))).rejects.toThrow(/unknown tool/);
+  });
+
+  it("refuses to shadow or remove built-in agents", async () => {
+    const dir = await tmpDir();
+    const registry = new AgentRegistry({ agentsDir: dir });
+    await registry.create(serialized());
+    await expect(registry.create(serialized({ id: "coding" }))).rejects.toThrow(/cannot override built-in/);
+    await expect(registry.remove("coding")).rejects.toThrow(/cannot remove built-in/);
+  });
+
+  it("remove reports typos instead of silently succeeding", async () => {
+    const dir = await tmpDir();
+    const registry = new AgentRegistry({ agentsDir: dir });
+    await expect(registry.remove("ghost")).rejects.toThrow(/no agent 'ghost'/);
   });
 
   it("validates tool names against the built-in registry", () => {

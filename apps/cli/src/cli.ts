@@ -179,9 +179,9 @@ async function configCommand(args: string[]): Promise<number> {
     }
     if (key === "agent") {
       const registry = new AgentRegistry({ agentsDir: path.join(state.paths.root, "agents") });
-      if (!(await registry.has(value))) {
-        process.stderr.write(`unknown agent '${value}' (available: ${(await registry.listIds()).join(", ")})\n`);
-        return 1;
+      const available = await registry.listIds();
+      if (!available.includes(value)) {
+        throw new Error(`unknown agent '${value}' (available: ${available.join(", ")})`);
       }
     }
     state.config.set(internal, value);

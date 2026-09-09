@@ -66,8 +66,7 @@ describe("cli", () => {
 
   it("config set agent rejects unknown agents", async () => {
     process.env.MYAGENT_HOME = await mkdtemp(join(tmpdir(), "myagent-cli-"));
-    const code = await cli(["config", "set", "agent", "ghost"]);
-    expect(code).toBe(1);
+    await expect(cli(["config", "set", "agent", "ghost"])).rejects.toThrow(/unknown agent 'ghost'/);
   });
 
   it("agent create refuses malformed tool lists", async () => {

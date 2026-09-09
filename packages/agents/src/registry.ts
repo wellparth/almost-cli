@@ -71,6 +71,9 @@ export class AgentRegistry {
   /** Validate, persist, and register a new user agent (overwrites same id). */
   async create(serialized: SerializedAgent): Promise<AgentDefinition> {
     if (!this.#agentsDir) throw new Error("agent registry has no agents directory (read-only)");
+    if (this.builtin(serialized.id)) {
+      throw new Error(`cannot override built-in agent '${serialized.id}'`);
+    }
     const errors = validateSerialized(serialized, this.#registry);
     if (errors.length > 0) throw new Error(`invalid agent: ${errors.join("; ")}`);
     const definition = toDefinition(serialized, this.#registry);
@@ -84,7 +87,14 @@ export class AgentRegistry {
   async remove(id: string): Promise<void> {
     if (!this.#agentsDir) throw new Error("agent registry has no agents directory (read-only)");
     if (this.builtin(id)) throw new Error(`cannot remove built-in agent '${id}'`);
-    await fs.rm(path.join(this.#agentsDir, `${id}${AGENT_FILE_SUFFIX}`), { force: true });
+    const file = path.join(this.#agentsDir, `${id}${AGENT_FILE_SUFFIX}`);
+    try {
+      await fs.rm(file);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") throw new Error(`no agent '${id}' (agent file not found)`);
+      throw error;
+    }
     this.#userCache.delete(id);
   }
 
