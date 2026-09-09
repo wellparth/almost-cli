@@ -1,50 +1,48 @@
 # Roadmap
 
-Implemented against the technical specification in the project plan. Each phase below
-is tracked as a GitHub milestone. Phases map to `docs/` and package structure.
+Implemented against the technical specification in the project plan. Each phase
+is tracked as a GitHub issue (#1–#11). Status reflects what has landed on `main`.
 
-## Phase 0 — Architecture
+## Phase 0 — Architecture ✅
 
-Type safe skeleton: core types, provider/agent/tool/event/permission interfaces.
+Type safe skeleton: core types, provider/agent/tool/event/permission interfaces, monorepo scaffold, CI. (`@almost/agent-core`, PR #12, #13; issue #1)
 
-## Phase 1 — Single Agent
+## Phase 1 — Single Agent ✅
 
-A reliable coding agent: one provider, streaming, tool calling, filesystem tools,
-search, shell, git, permission system.
+Single-agent coding loop: streaming, tool calling, permission system, filesystem/search/shell/git tools. (`@almost/tools`, `@almost/agent-runtime`; PRs #16, #18; issue #2)
 
-## Phase 2 — Four Providers
+## Phase 2 — Four Providers ✅
 
-OpenAI, Gemini, DeepSeek, NVIDIA NIM adapters, BYOK credentials, model discovery,
-capability detection.
+OpenAI, Gemini, DeepSeek, NVIDIA NIM adapters, BYOK credentials, model discovery. (`@almost/providers` family; PR #15; issue #3)
 
-## Phase 3 — Context Engine
+## Phase 3 — Context Engine ✅
 
-Repository map, token budget, context selection, history, compaction, task state.
+Session store, event log, CLI session persistence, config + credentials storage. (`@almost/storage`, CLI `sessions`/`config`/`auth`; PRs #17, #19; issue #4)
 
-## Phase 4 — Built In Agents
+## Phase 4 — Built In Agents ✅
 
-Architect, Planner, Builder, Tester, Debugger.
+Built-in coding agent definition: system prompt, tool set, permission defaults, myagent CLI (`run`, REPL, `init`, `auth`, `models`, `config`, `sessions`). (`@almost/agents`, `apps/cli`, CI checks; PR #19; issue #5)
 
 ## Phase 5 — Orchestrator
 
-Task graph, dependency resolver, scheduler, agent state, event bus, failure handling.
+Task graph, dependency resolver, scheduler, agent state, event bus, failure handling. (issue #6 — next)
 
 ## Phase 6 — Parallel Agents
 
-Concurrent execution, resource locks, task isolation, agent worktrees, conflict detection.
+Concurrent execution, resource locks, task isolation, agent worktrees, conflict detection. (issue #7)
 
 ## Phase 7 — Custom Agents
 
-`agent create`, custom prompts/models/tools/permissions.
+`agent create`, custom prompts/models/tools/permissions. (issue #8)
 
 ## Phase 8 — MCP
 
-MCP client, server config, tool discovery, permissions, lifecycle.
+MCP client, server config, tool discovery, permissions, lifecycle. (issue #9)
 
 ## Phase 9 — Security Hardening
 
-Prompt injection defense, sandboxing, secret protection, audit logs, network controls.
+Prompt injection defense, sandboxing, secret protection, audit logs, network controls. (issue #10)
 
 ## Phase 10 — Advanced Agent Runtime
 
-Subagents, model routing, agent delegation, adaptive workflows, parallel planning.
+Subagents, model routing, agent delegation, adaptive workflows, parallel planning. (issue #11)
