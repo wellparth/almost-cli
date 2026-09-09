@@ -119,6 +119,43 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  apps/cli:
+    dependencies:
+      '@almost/agent-core':
+        specifier: workspace:*
+        version: link:../../packages/agent-core
+      '@almost/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
+      '@almost/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
+      '@almost/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
+      '@almost/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
+      '@almost/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@almost/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/agent-core:
     devDependencies:
       tsup:
@@ -152,6 +189,25 @@ importers:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/agents:
+    dependencies:
+      '@almost/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
+      '@almost/tools':
+        specifier: workspace:*
+        version: link:../tools
+    devDependencies:
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)
