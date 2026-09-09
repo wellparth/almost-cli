@@ -49,3 +49,5 @@ export function getAgent(id: string): AgentDefinition {
   if (!agent) throw new Error(`unknown agent '${id}' (available: ${BUILTIN_AGENTS.map((a) => a.id).join(", ")})`);
   return agent;
 }
+
+export * from "./registry.js";

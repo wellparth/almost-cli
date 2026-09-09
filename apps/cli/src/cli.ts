@@ -1,10 +1,13 @@
 import { createBuiltinRegistry } from "@almost/providers";
-import { BUILTIN_AGENTS } from "@almost/agents";
+import { AgentRegistry, BUILTIN_AGENTS } from "@almost/agents";
 import { openStorage, defaultPaths } from "@almost/storage";
 import { executeRun, persistTurn, startRepl } from "./repl.js";
-import { buildRunner, listModelsFor, resolveModel, resolveProvider } from "./runner.js";
+import { buildRunner, listModelsFor, resolveProvider } from "./runner.js";
 import { openPersistence } from "./persistence.js";
+import { agentCommand } from "./agent-commands.js";
 import type { Runner } from "./runner.js";
+import type { AppState } from "@almost/storage";
+import path from "node:path";
 
 const HELP = `myagent — BYOK multi-agent coding CLI
 
@@ -14,6 +17,10 @@ Commands:
   (no args)                    start interactive REPL
   run "<prompt>"               run a one-shot task
   init                         scaffold ~/.myagent config
+  agent list                   list agents (built-in + custom)
+  agent show <id>              show an agent definition
+  agent create <id> ...        create a custom agent
+  agent remove <id>            remove a custom agent
   auth list                    list configured credentials (names only)
   auth set <env-var-name>      store a key from an env var for the matching provider
   auth remove <env-var-name>   remove a stored credential
@@ -28,6 +35,7 @@ Commands:
 Examples:
   myagent config set default-provider openai
   myagent config set default-model gpt-4o
+  myagent agent create docs --name "Docs" --prompt "Write concise docs." --tools read_file,grep
   myagent auth set OPENAI_API_KEY
   myagent run "add a --version flag to the CLI"
 `;
@@ -49,6 +57,8 @@ export async function cli(argv: string[]): Promise<number> {
   }
 
   if (cmd === "auth") return authCommand(rest);
+
+  if (cmd === "agent") return agentCommand(rest, await openStorage());
 
   if (cmd === "models") return modelsCommand(rest);
 
@@ -168,8 +178,10 @@ async function configCommand(args: string[]): Promise<number> {
       if (!registry.has(value)) throw new Error(`unknown provider '${value}' (available: ${registry.ids().join(", ")})`);
     }
     if (key === "agent") {
-      if (!BUILTIN_AGENTS.some((a) => a.id === value)) {
-        throw new Error(`unknown agent '${value}' (available: ${BUILTIN_AGENTS.map((a) => a.id).join(", ")})`);
+      const registry = new AgentRegistry({ agentsDir: path.join(state.paths.root, "agents") });
+      const available = await registry.listIds();
+      if (!available.includes(value)) {
+        throw new Error(`unknown agent '${value}' (available: ${available.join(", ")})`);
       }
     }
     state.config.set(internal, value);
@@ -253,11 +265,9 @@ async function replCommand(): Promise<number> {
 }
 
 async function runnerOf(
-  state: import("@almost/storage").AppState,
+  state: AppState,
   providerId?: string,
   model?: string,
 ): Promise<Runner> {
-  const provider = resolveProvider(state, providerId);
-  const resolved = model ?? (await resolveModel(state));
-  return buildRunner({ state, providerId, model: resolved });
+  return buildRunner({ state, providerId, model });
 }
