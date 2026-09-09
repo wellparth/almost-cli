@@ -1,7 +1,7 @@
-import { join } from "node:path";
+import { join, isAbsolute, relative, resolve, sep } from "node:path";
 import { readdir, readFile, stat } from "node:fs/promises";
 import type { AgentTool, ToolContext, ToolResult } from "@almost/agent-core";
-import { denied } from "./result.js";
+import { WorkspaceEscapeError, denied } from "./result.js";
 
 const IGNORE_DIRS = new Set([
   "node_modules",
@@ -46,6 +46,15 @@ async function walkFiles(root: string, maxDepth = 8): Promise<string[]> {
   return results;
 }
 
+function searchRoot(ctx: ToolContext, path?: string): string {
+  const root = resolve(ctx.workspaceRoot);
+  const target = path && path !== "." ? resolve(ctx.cwd, path) : root;
+  if (target !== root && !target.startsWith(root + sep)) {
+    throw new WorkspaceEscapeError(`search path resolves outside the workspace: ${path}`);
+  }
+  return target;
+}
+
 export const searchFilesTool: AgentTool = {
   name: "search_files",
   description: "Find files whose path matches a pattern under a directory.",
@@ -64,13 +73,13 @@ export const searchFilesTool: AgentTool = {
     if (!pattern) return { ok: false, error: "missing 'pattern'" };
     const decision = await ctx.permissions.check("filesystem.read", path ?? ".");
     if (decision.verdict !== "allowed") return denied(decision);
-    const root = path && path !== "." ? join(ctx.workspaceRoot, path) : ctx.workspaceRoot;
+    const root = searchRoot(ctx, path);
     const regex = makeSafeRegex(pattern);
     const files = await walkFiles(root);
     const matches: string[] = [];
     for (const file of files) {
-      const relative = file.replace(root + "/", "");
-      if (regex.test(relative)) matches.push(relative);
+      const rel = relative(root, file);
+      if (regex.test(rel)) matches.push(rel);
     }
     return { ok: true, output: matches.join("\n") || "(no matches)" };
   },
@@ -101,7 +110,7 @@ export const grepTool: AgentTool = {
     if (!pattern) return { ok: false, error: "missing 'pattern'" };
     const decision = await ctx.permissions.check("filesystem.read", path ?? ".");
     if (decision.verdict !== "allowed") return denied(decision);
-    const root = path && path !== "." ? join(ctx.workspaceRoot, path) : ctx.workspaceRoot;
+    const root = searchRoot(ctx, path);
     const regex = makeSafeRegex(pattern);
     const includeRegex = include ? makeSafeRegex(include) : null;
     const cap = maxMatches ?? 200;
@@ -120,7 +129,7 @@ export const grepTool: AgentTool = {
       const lines = content.split("\n");
       for (let i = 0; i < lines.length && results.length < cap; i++) {
         if (regex.test(lines[i] ?? "")) {
-          results.push(`${file.replace(root + "/", "")}:${i + 1}:${(lines[i] ?? "").slice(0, 200)}`);
+          results.push(`${relative(root, file)}:${i + 1}:${(lines[i] ?? "").slice(0, 200)}`);
         }
       }
       if (results.length >= cap) break;

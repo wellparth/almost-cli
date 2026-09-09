@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, readdir, rm, writeFile, stat } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { AgentTool, ToolContext, ToolResult } from "@almost/agent-core";
-import { denied } from "./result.js";
+import { WorkspaceEscapeError, denied } from "./result.js";
 
 async function hasAccess(path: string): Promise<boolean> {
   try {
@@ -12,9 +12,17 @@ async function hasAccess(path: string): Promise<boolean> {
   }
 }
 
+function within(root: string, target: string): boolean {
+  return target === root || target.startsWith(root + sep);
+}
+
 function resolvePath(ctx: ToolContext, requested: string): string {
-  const base = requested ? resolve(ctx.cwd, requested) : ctx.workspaceRoot;
-  return base;
+  const root = resolve(ctx.workspaceRoot);
+  const target = requested ? resolve(ctx.cwd, requested) : root;
+  if (!within(root, target)) {
+    throw new WorkspaceEscapeError(`path resolves outside the workspace: ${requested}`);
+  }
+  return target;
 }
 
 export const readFileTool: AgentTool = {

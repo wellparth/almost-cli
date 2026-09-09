@@ -1,4 +1,5 @@
 import type { AgentTool } from "@almost/agent-core";
+import { wrapTool } from "./result.js";
 import {
   deleteFileTool,
   editFileTool,
@@ -23,7 +24,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
   gitDiffTool,
   gitLogTool,
   gitBranchTool,
-];
+].map(wrapTool);
 
 export function buildToolRegistry(): Map<string, AgentTool> {
   return new Map(BUILTIN_TOOLS.map((tool) => [tool.name, tool]));

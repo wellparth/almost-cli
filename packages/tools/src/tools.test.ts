@@ -66,6 +66,16 @@ describe("filesystem tools", () => {
     );
     expect(result.ok).toBe(false);
   });
+
+  it("blocks paths that escape the workspace", async () => {
+    const c = ctx(dir);
+    const read = await readFileTool.execute({ path: "../outside.txt" }, c);
+    expect(read.ok).toBe(false);
+    const write = await writeFileTool.execute({ path: "/tmp/almost-escape.txt", content: "x" }, c);
+    expect(write.ok).toBe(false);
+    const del = await deleteFileTool.execute({ path: "/tmp/whatever" }, c);
+    expect(del.ok).toBe(false);
+  });
 });
 
 describe("search tools", () => {

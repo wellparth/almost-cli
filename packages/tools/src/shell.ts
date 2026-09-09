@@ -4,19 +4,31 @@ import { denied } from "./result.js";
 
 const DANGEROUS_PATTERNS = [
   /\brm\s+-rf\b/,
+  /\brm\s+-fr\b/,
   /\brmdir\b/,
   /\bsudo\b/,
   /\bgit\s+push\b/,
   /\bgit\s+commit\b.*--amend/,
   /\b>+\s*\/dev\/sd/,
   /\bdd\s+if=/,
-  /\b:wq!/,
-  /;\s*(rm|shutdown|reboot|mkfs)/,
+  /\b:n?wq!?/,
   /\bmkfs\b/,
   /\bshutdown\b/,
   /\breboot\b/,
+  /\bsh\s+-c\b/,
+  /\bbash\s+-c\b/,
+  /\beval\b/,
+  /\bcurl\b[^\n]*\|\s*(sh|bash)\b/,
+  /\bwget\b[^\n]*\|\s*(sh|bash)\b/,
+  /`/,
+  /\$\(/,
 ];
 
+/**
+ * Best-effort guard against obviously destructive commands. This is NOT the
+ * primary security boundary: shell.write is not granted by default and shell
+ * execution is routed through the permission engine (and typically approval).
+ */
 export function isDangerousCommand(command: string): boolean {
   return DANGEROUS_PATTERNS.some((re) => re.test(command));
 }
