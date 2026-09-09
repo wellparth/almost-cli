@@ -14,7 +14,7 @@ export interface Session {
 }
 
 export interface SessionStore {
-  create(metadata: Omit<SessionMetadata, "createdAt" | "updatedAt">): Promise<Session>;
+  create(metadata: Omit<SessionMetadata, "id" | "createdAt" | "updatedAt">): Promise<Session>;
   load(id: string): Promise<Session | undefined>;
   list(): Promise<SessionMetadata[]>;
   appendMessage(sessionId: string, message: import("./task.js").AgentMessage): Promise<void>;
