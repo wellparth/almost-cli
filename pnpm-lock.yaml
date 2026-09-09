@@ -147,6 +147,117 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/providers:
+    dependencies:
+      '@almost/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
+      '@almost/providers-core':
+        specifier: workspace:*
+        version: link:core
+      '@almost/providers-deepseek':
+        specifier: workspace:*
+        version: link:deepseek
+      '@almost/providers-gemini':
+        specifier: workspace:*
+        version: link:gemini
+      '@almost/providers-nvidia':
+        specifier: workspace:*
+        version: link:nvidia
+      '@almost/providers-openai':
+        specifier: workspace:*
+        version: link:openai
+    devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/providers/core:
+    dependencies:
+      '@almost/agent-core':
+        specifier: workspace:*
+        version: link:../../agent-core
+    devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/providers/deepseek:
+    dependencies:
+      '@almost/providers-core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/providers/gemini:
+    dependencies:
+      '@almost/agent-core':
+        specifier: workspace:*
+        version: link:../../agent-core
+    devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/providers/nvidia:
+    dependencies:
+      '@almost/providers-core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/providers/openai:
+    dependencies:
+      '@almost/providers-core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.28)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
 packages:
 
   '@esbuild/aix-ppc64@0.21.5':
