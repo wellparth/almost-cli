@@ -1,11 +1,12 @@
 import { createBuiltinRegistry } from "@almost/providers";
-import { getAgent } from "@almost/agents";
+import { AgentRegistry } from "@almost/agents";
 import type { AgentDefinition } from "@almost/agents";
 import { PolicyPermissionChecker } from "@almost/permissions";
 import type { Permission, PermissionSet } from "@almost/agent-core";
 import { ToolExecutor } from "@almost/agent-runtime";
 import type { AppState } from "@almost/storage";
 import type { ModelProvider } from "@almost/agent-core";
+import path from "node:path";
 import { askApproval } from "./approvals.js";
 
 export interface Runner {
@@ -50,19 +51,26 @@ export async function listModelsFor(state: AppState, providerId?: string): Promi
   return models.map((m) => m.id);
 }
 
+/** Resolve a built-in or user-defined agent, defaulting to config's `agent`. */
+export async function resolveAgent(state: AppState, agentId?: string): Promise<AgentDefinition> {
+  const registry = new AgentRegistry({ agentsDir: path.join(state.paths.root, "agents") });
+  const id = agentId ?? state.config.get("agent") ?? "coding";
+  return registry.get(id);
+}
+
 export async function resolveModel(
   state: AppState,
   requestedModel?: string,
 ): Promise<string> {
-  const hint = getAgent(state.config.get("agent") ?? "coding").defaultModelHint ?? "gpt-4o";
+  const hint = (await resolveAgent(state)).defaultModelHint ?? "gpt-4o";
   return requestedModel ?? state.config.get("defaultModel") ?? hint;
 }
 
-export function buildRunner(options: RunnerOptions): Runner {
+export async function buildRunner(options: RunnerOptions): Promise<Runner> {
   const { state, providerId, model: requestedModel, agentId } = options;
   injectCredentials(state);
   const provider = resolveProvider(state, providerId);
-  const agent = getAgent(agentId ?? state.config.get("agent") ?? "coding");
+  const agent = await resolveAgent(state, agentId);
 
   // Resolve the model synchronously is not possible (listModels is async), so
   // the CLI resolves the model before calling buildRunner; requestedModel is
