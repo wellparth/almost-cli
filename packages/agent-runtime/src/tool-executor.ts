@@ -1,20 +1,20 @@
-import type { AgentTool, PermissionChecker, PermissionDecision, ToolContext, ToolResult } from "@almost/agent-core";
+import type { AgentTool, Permission, PermissionChecker, PermissionDecision, ToolContext, ToolResult } from "@almost/agent-core";
 import { toToolDefinition } from "@almost/agent-core";
 
 /**
- * Wraps a checker so each (permission, detail) decision is resolved once.
- * The loop performs the authoritative permission check before executing a
- * tool; tools re-check internally, and this avoids prompting twice.
+ * Wraps a checker so each permission is decided once per run. Permission
+ * decisions are session-scoped: denying or approving "filesystem.write"
+ * applies to the whole run, so tool-side re-checks hit the same cache as the
+ * loop's own check and users are never prompted twice for one action.
  */
 export function memoizeDecisions(checker: PermissionChecker): PermissionChecker {
-  const cache = new Map<string, PermissionDecision>();
+  const cache = new Map<Permission, PermissionDecision>();
   return {
-    async check(permission, detail) {
-      const key = `${permission}\u0000${detail ?? ""}`;
-      const cached = cache.get(key);
+    async check(permission, _detail) {
+      const cached = cache.get(permission);
       if (cached) return cached;
-      const decision = await checker.check(permission, detail);
-      cache.set(key, decision);
+      const decision = await checker.check(permission);
+      cache.set(permission, decision);
       return decision;
     },
   };
@@ -35,6 +35,7 @@ export interface ToolExecutorOptions {
 export class ToolExecutor {
   readonly #tools: Map<string, AgentTool>;
   readonly #context: ToolContext;
+  readonly permissions: PermissionChecker;
 
   constructor(options: ToolExecutorOptions) {
     this.#tools = new Map(options.tools.map((t) => [t.name, t]));
@@ -42,10 +43,19 @@ export class ToolExecutor {
       ...options.context,
       permissions: memoizeDecisions(options.context.permissions),
     };
+    this.permissions = this.#context.permissions;
   }
 
   get definitions() {
     return [...this.#tools.values()].map(toToolDefinition);
+  }
+
+  /**
+   * Primary permission required by a tool. Unknown tools register as
+   * `undefined` so the loop fails closed instead of guessing permissions.
+   */
+  permissionFor(name: string): Permission | undefined {
+    return this.#tools.get(name)?.permissions[0];
   }
 
   async execute(name: string, id: string, input: unknown): Promise<ToolResult> {

@@ -1,9 +1,7 @@
 import type {
   EventSink,
-  ModelEvent,
   ModelProvider,
   ModelRequest,
-  PermissionChecker,
   StopReason,
   ToolCall,
   Usage,
@@ -16,7 +14,6 @@ export interface AgentLoopOptions {
   model: string;
   agentId: string;
   executor: ToolExecutor;
-  permissions: PermissionChecker;
   system?: string;
   input: string;
   maxIterations?: number;
@@ -36,6 +33,7 @@ export interface AgentRunResult {
 }
 
 const DEFAULT_MAX_ITERATIONS = 50;
+const MAX_TOOL_OUTPUT = 64 * 1024;
 
 export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentRunResult> {
   const {
@@ -43,7 +41,6 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentRunR
     model,
     agentId,
     executor,
-    permissions,
     system,
     input,
     maxIterations = DEFAULT_MAX_ITERATIONS,
@@ -72,30 +69,36 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentRunR
     let error: string | undefined;
     const toolCalls = new Map<string, ToolCall>();
 
-    for await (const event of streamFrom(provider, request)) {
-      switch (event.type) {
-        case "TEXT_DELTA":
-          text += event.content;
-          onToken?.(event.content, "output");
-          break;
-        case "REASONING_DELTA":
-          reasoning += event.content;
-          onToken?.(event.content, "reasoning");
-          break;
-        case "TOOL_CALL":
-          toolCalls.set(event.id, { id: event.id, name: event.name, input: event.input });
-          break;
-        case "USAGE":
-          totalUsage = event.usage;
-          break;
-        case "FINISH":
-          stopReason = event.stopReason;
-          finalStopReason = event.stopReason;
-          break;
-        case "ERROR":
-          error = event.message;
-          break;
+    try {
+      for await (const event of provider.generate(request)) {
+        switch (event.type) {
+          case "TEXT_DELTA":
+            text += event.content;
+            onToken?.(event.content, "output");
+            break;
+          case "REASONING_DELTA":
+            reasoning += event.content;
+            onToken?.(event.content, "reasoning");
+            break;
+          case "TOOL_CALL":
+            toolCalls.set(event.id, { id: event.id, name: event.name, input: event.input });
+            break;
+          case "USAGE":
+            totalUsage = event.usage;
+            break;
+          case "FINISH":
+            stopReason = event.stopReason;
+            finalStopReason = event.stopReason;
+            break;
+          case "ERROR":
+            error = event.message;
+            break;
+        }
       }
+    } catch (streamError) {
+      const message = streamError instanceof Error ? streamError.message : String(streamError);
+      await onEvent?.({ type: "AgentFailed", sessionId: "", agentId, error: message, timestamp: Date.now() });
+      return { status: "failed", error: message, iterations: iteration + 1, messages, usage: totalUsage };
     }
 
     if (error) {
@@ -105,7 +108,19 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentRunR
 
     messages.push({ role: "assistant", content: text, toolCalls: [...toolCalls.values()] });
 
-    if (stopReason !== "tool_calls" && toolCalls.size === 0) {
+    if (stopReason === "length" && toolCalls.size === 0) {
+      await onEvent?.({ type: "AgentFailed", sessionId: "", agentId, error: "output truncated (length)", timestamp: Date.now() });
+      return {
+        status: "failed",
+        error: "provider output truncated (stop reason: length)",
+        iterations: iteration + 1,
+        messages,
+        usage: totalUsage,
+        stopReason: finalStopReason,
+      };
+    }
+
+    if (toolCalls.size === 0) {
       await onEvent?.({ type: "AgentCompleted", sessionId: "", agentId, timestamp: Date.now() });
       return {
         status: "completed",
@@ -127,15 +142,25 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentRunR
         input: call.input,
         timestamp: Date.now(),
       });
-      const decision = await permissions.check(
-        mapPermission(call.name),
-        JSON.stringify(call.input).slice(0, 500),
-      );
+      const permission = executor.permissionFor(call.name);
+      if (!permission) {
+        messages.push({ role: "tool", toolCallId: id, content: `denied: unknown tool "${call.name}"` });
+        await onEvent?.({
+          type: "ToolExecuted",
+          sessionId: "",
+          agentId,
+          tool: call.name,
+          ok: false,
+          timestamp: Date.now(),
+        });
+        continue;
+      }
+      const decision = await executor.permissions.check(permission);
       await onEvent?.({
         type: "PermissionRequested",
         sessionId: "",
         agentId,
-        permission: mapPermission(call.name),
+        permission,
         timestamp: Date.now(),
       });
       if (decision.verdict !== "allowed") {
@@ -153,7 +178,14 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentRunR
       }
       const result = await executor.execute(call.name, id, call.input);
       const output = result.ok ? result.output : `error: ${result.error}`;
-      messages.push({ role: "tool", toolCallId: id, content: output });
+      messages.push({
+        role: "tool",
+        toolCallId: id,
+        content:
+          output.length > MAX_TOOL_OUTPUT
+            ? `${output.slice(0, MAX_TOOL_OUTPUT)}\n…[truncated ${output.length - MAX_TOOL_OUTPUT} chars]`
+            : output,
+      });
       await onEvent?.({
         type: "ToolExecuted",
         sessionId: "",
@@ -174,30 +206,4 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentRunR
     usage: totalUsage,
     stopReason: finalStopReason,
   };
-}
-
-async function* streamFrom(
-  provider: ModelProvider,
-  request: ModelRequest,
-): AsyncIterable<ModelEvent> {
-  yield* provider.generate(request);
-}
-
-const PERMISSION_BY_TOOL: Record<string, import("@almost/agent-core").Permission> = {
-  read_file: "filesystem.read",
-  write_file: "filesystem.write",
-  edit_file: "filesystem.write",
-  delete_file: "filesystem.delete",
-  list_directory: "filesystem.read",
-  search_files: "filesystem.read",
-  grep: "filesystem.read",
-  shell: "shell.execute",
-  git_status: "git.read",
-  git_diff: "git.read",
-  git_log: "git.read",
-  git_branch: "git.read",
-};
-
-function mapPermission(toolName: string): import("@almost/agent-core").Permission {
-  return PERMISSION_BY_TOOL[toolName] ?? "shell.execute";
 }

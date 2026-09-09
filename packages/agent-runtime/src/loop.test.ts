@@ -63,7 +63,6 @@ describe("runAgentLoop", () => {
       model: "test",
       agentId: "a",
       executor,
-      permissions: ALLOW,
       input: "hi",
     });
     expect(result.status).toBe("completed");
@@ -94,7 +93,6 @@ describe("runAgentLoop", () => {
       model: "test",
       agentId: "a",
       executor,
-      permissions: ALLOW,
       input: "read a.txt",
     });
     expect(result.status).toBe("completed");
@@ -105,7 +103,7 @@ describe("runAgentLoop", () => {
   it("reports denial when permission is denied", async () => {
     const executor = new ToolExecutor({
       tools: [makeTool("write_file", { ok: true, output: "wrote" }, ["filesystem.write"])],
-      context: context(),
+      context: { ...context(), permissions: DENY },
     });
     const provider = fakeProvider([
       [
@@ -119,13 +117,71 @@ describe("runAgentLoop", () => {
       model: "test",
       agentId: "a",
       executor,
-      permissions: DENY,
       input: "write x",
     });
     expect(result.status).toBe("completed");
     const toolMessages = result.messages.filter((m) => m.role === "tool");
     expect(toolMessages).toHaveLength(1);
     expect(String(toolMessages[0]?.content)).toContain("nope");
+  });
+
+  it("fails closed on unknown tools", async () => {
+    const executor = new ToolExecutor({ tools: [], context: context() });
+    const provider = fakeProvider([
+      [
+        { type: "TOOL_CALL", id: "t1", name: "mystery", input: {} },
+        { type: "FINISH", stopReason: "tool_calls" },
+      ],
+      [{ type: "TEXT_DELTA", content: "ok" }, { type: "FINISH", stopReason: "stop" }],
+    ]);
+    const result = await runAgentLoop({
+      provider,
+      model: "test",
+      agentId: "a",
+      executor,
+      input: "run it",
+    });
+    expect(result.status).toBe("completed");
+    const toolMessages = result.messages.filter((m) => m.role === "tool");
+    expect(String(toolMessages[0]?.content)).toContain("unknown tool");
+  });
+
+  it("handles streamed provider errors as failure", async () => {
+    const executor = new ToolExecutor({ tools: [], context: context() });
+    const provider: ModelProvider = {
+      id: "boom",
+      supports: () => true,
+      async listModels() {
+        return [];
+      },
+      async *generate() {
+        throw new Error("stream exploded");
+      },
+    };
+    const result = await runAgentLoop({
+      provider,
+      model: "test",
+      agentId: "a",
+      executor,
+      input: "hi",
+    });
+    expect(result.status).toBe("failed");
+    expect(result.error).toBe("stream exploded");
+  });
+
+  it("does not loop forever when tool_calls stop has no calls", async () => {
+    const executor = new ToolExecutor({ tools: [], context: context() });
+    const provider = fakeProvider([[{ type: "FINISH", stopReason: "tool_calls" }]]);
+    const result = await runAgentLoop({
+      provider,
+      model: "test",
+      agentId: "a",
+      executor,
+      input: "hi",
+      maxIterations: 10,
+    });
+    expect(result.status).toBe("completed");
+    expect(result.iterations).toBe(1);
   });
 
   it("surfaces provider errors as failure", async () => {
@@ -136,7 +192,6 @@ describe("runAgentLoop", () => {
       model: "test",
       agentId: "a",
       executor,
-      permissions: ALLOW,
       input: "hi",
     });
     expect(result.status).toBe("failed");
@@ -172,7 +227,6 @@ describe("runAgentLoop", () => {
       model: "test",
       agentId: "a",
       executor,
-      permissions: ALLOW,
       input: "hi",
       onEvent: sink,
     });
