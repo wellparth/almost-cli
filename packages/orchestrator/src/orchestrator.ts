@@ -55,9 +55,9 @@ export class Orchestrator {
 
   async run(graph: TaskGraph): Promise<OrchestratorRunResult> {
     const runTask = async (task: TaskSpec): Promise<TaskOutcome> => {
-      const workspace = await this.#workspaceFor?.(task);
-      const executor = workspace === undefined ? this.#executor : this.#executor.scoped(workspace);
       try {
+        const workspace = await this.#workspaceFor?.(task);
+        const executor = workspace === undefined ? this.#executor : this.#executor.scoped(workspace);
         if (task.options?.providerId && task.options.providerId !== this.#provider.id) {
           throw new Error(`provider ${task.options.providerId} is not available to this orchestrator`);
         }

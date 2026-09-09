@@ -51,6 +51,7 @@ export class WorktreeManager {
   }
 
   async acquire(id: string): Promise<WorktreeInfo> {
+    validateTaskId(id);
     if (this.#active.has(id)) {
       return { id, path: this.#active.get(id) as string };
     }
@@ -88,19 +89,23 @@ export class WorktreeManager {
     }
   }
 
-  /** Files changed in a task's worktree relative to the base revision. */
+  /** Files changed in a task's worktree relative to the base revision.
+   * Includes modified/deleted tracked files and newly added (untracked,
+   * non-ignored) files. Ignores renames. */
   async changedFiles(id: string): Promise<string[]> {
     const worktreePath = this.#active.get(id);
     if (worktreePath === undefined) throw new Error(`no active worktree for ${id}`);
-    const { stdout } = await this.#git(this.#repoRoot, [
-      "-C",
-      worktreePath,
-      "diff",
-      "--name-only",
-      "-z",
-      this.#baseRef,
+    const [tracked, untracked] = await Promise.all([
+      this.#git(this.#repoRoot, ["-C", worktreePath, "diff", "--name-only", "-z", this.#baseRef]),
+      this.#git(this.#repoRoot, ["-C", worktreePath, "ls-files", "--others", "--exclude-standard", "-z"]),
     ]);
-    return stdout ? stdout.split("\0").filter(Boolean) : [];
+    const files = new Set<string>();
+    for (const chunk of [tracked.stdout, untracked.stdout]) {
+      for (const file of chunk.split("\0")) {
+        if (file.length > 0) files.add(file);
+      }
+    }
+    return [...files];
   }
 
   async #git(cwd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
@@ -110,5 +115,11 @@ export class WorktreeManager {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`git worktree operation failed: ${message}`);
     }
+  }
+}
+
+function validateTaskId(id: string): void {
+  if (id.length === 0 || id === "." || id === ".." || /[\\/]/.test(id)) {
+    throw new Error(`invalid worktree task id: ${JSON.stringify(id)}`);
   }
 }

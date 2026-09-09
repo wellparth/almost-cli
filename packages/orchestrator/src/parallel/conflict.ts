@@ -2,6 +2,9 @@
  * Conflict detection between parallel tasks. Each task reports the files it
  * touched (relative paths, from a common base revision). A conflict is any
  * file touched by more than one task; distinct files never conflict.
+ *
+ * Paths are matched verbatim: normalize relative paths the same way from every
+ * task (e.g. always with "./" or always without) before calling these helpers.
  */
 
 export type ChangeKind = "added" | "modified" | "deleted";

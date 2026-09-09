@@ -92,6 +92,14 @@ describe("ConflictDetector", () => {
     expect(report.conflicts).toHaveLength(1);
   });
 
+  it("documents paths are matched verbatim (no normalization)", () => {
+    const report = detectConflicts([
+      { task: "a", changes: [{ file: "./src/a.ts", kind: "modified" }] },
+      { task: "b", changes: [{ file: "src/a.ts", kind: "modified" }] },
+    ]);
+    expect(report.conflicts).toHaveLength(0);
+  });
+
   it("flags conflicts via the hasConflicts convenience check", () => {
     const sets: TaskChangeSet[] = [
       { task: "a", changes: [{ file: "src/shared.ts", kind: "modified" }] },

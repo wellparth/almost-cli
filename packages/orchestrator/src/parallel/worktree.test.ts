@@ -70,6 +70,32 @@ describe("WorktreeManager", () => {
     }
   });
 
+  it("reports newly added (untracked) files as changes", async () => {
+    const { repoRoot, cleanUp } = await repo();
+    try {
+      const manager = new WorktreeManager({ repoRoot });
+      const wt = await manager.acquire("task-1");
+      await fs.writeFile(path.join(wt.path, "brand-new.ts"), "export const x = 1;\n");
+      const changed = await manager.changedFiles("task-1");
+      expect(changed).toContain("brand-new.ts");
+      await manager.releaseAll();
+    } finally {
+      await cleanUp();
+    }
+  });
+
+  it("rejects task ids that escape the worktrees directory", async () => {
+    const { repoRoot, cleanUp } = await repo();
+    try {
+      const manager = new WorktreeManager({ repoRoot });
+      for (const bad of ["..", ".", "a/b", "a\\b"]) {
+        await expect(manager.acquire(bad)).rejects.toThrow(/invalid worktree task id/);
+      }
+    } finally {
+      await cleanUp();
+    }
+  });
+
   it("throws for a non-git directory", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "almost-nowt-"));
     tmpDirs.push(dir);
