@@ -58,8 +58,17 @@ export async function cli(argv: string[]): Promise<number> {
 
   if (cmd === "run") {
     const input = argv.slice(1).join(" ").trim();
-    if (!input) throw new Error("usage: myagent run \"<prompt>\"");
-    return await runOnce(input, undefined);
+    const modelFlag = argv.indexOf("--model");
+    const providerFlag = argv.indexOf("--provider");
+    const model = modelFlag >= 0 ? argv[modelFlag + 1] : undefined;
+    const provider = providerFlag >= 0 ? argv[providerFlag + 1] : undefined;
+    const trimmed = input
+      .replace(modelFlag >= 0 ? new RegExp(`--model(?:\\s+\\S+)?`) : "", "")
+      .replace(providerFlag >= 0 ? new RegExp(`--provider(?:\\s+\\S+)?`) : "", "")
+      .replace(/^[\s]*/, "")
+      .trim();
+    if (!trimmed) throw new Error("usage: myagent run \"<prompt>\" [--model <id>] [--provider <id>]");
+    return await runOnce(trimmed, provider, model);
   }
 
   throw new Error(`unknown command '${cmd}' (run: myagent help)`);
@@ -214,9 +223,9 @@ async function sessionsCommand(args: string[]): Promise<number> {
   throw new Error("usage: myagent sessions <list|show|rm>");
 }
 
-async function runOnce(input: string, providerId?: string): Promise<number> {
+async function runOnce(input: string, providerId?: string, model?: string): Promise<number> {
   const state = await openStorage(defaultPaths());
-  const runner = await runnerOf(state, providerId);
+  const runner = await runnerOf(state, providerId, model);
   const persistence = await openPersistence(state.paths.sessionsDir, runner.agent.id);
   process.stdout.write(`agent: ${runner.agent.id} | ${runner.provider.id}/${runner.model}\n`);
   process.stdout.write(`session: ${persistence.sessionId}\n`);
@@ -243,8 +252,12 @@ async function replCommand(): Promise<number> {
   return 0;
 }
 
-async function runnerOf(state: import("@almost/storage").AppState, providerId?: string): Promise<Runner> {
+async function runnerOf(
+  state: import("@almost/storage").AppState,
+  providerId?: string,
+  model?: string,
+): Promise<Runner> {
   const provider = resolveProvider(state, providerId);
-  const model = await resolveModel(state);
-  return buildRunner({ state, providerId, model });
+  const resolved = model ?? (await resolveModel(state));
+  return buildRunner({ state, providerId, model: resolved });
 }

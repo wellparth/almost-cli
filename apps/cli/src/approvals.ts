@@ -3,6 +3,11 @@ import { createInterface } from "node:readline";
 /**
  * Reads a single y/n answer on stdin. Stderr is used for the prompt so the
  * provider/agent output on stdout stays clean.
+ *
+ * Reentrancy: approval prompts only happen while the agent is running. In the
+ * REPL the main readline interface is paused for the duration of a turn, so
+ * this temporary interface is the only reader on stdin. In non-interactive
+ * (piped) mode we never prompt and deny by default (fail closed).
  */
 export function askApproval(
   permission: string,
