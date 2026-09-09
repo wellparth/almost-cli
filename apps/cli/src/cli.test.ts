@@ -3,6 +3,9 @@ import { cli } from "./cli.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const MCP_SERVER = fileURLToPath(new URL("../../../packages/mcp/test/fixtures/mcp-test-server.mjs", import.meta.url));
 
 describe("cli", () => {
   it("prints help", async () => {
@@ -74,5 +77,25 @@ describe("cli", () => {
     await expect(
       cli(["agent", "create", "bad", "--name", "Bad", "--prompt", "x", "--tools", "not-a-tool"]),
     ).rejects.toThrow(/unknown tool/);
+  });
+
+  it("mcp add/list/remove round-trips", async () => {
+    process.env.MYAGENT_HOME = await mkdtemp(join(tmpdir(), "myagent-cli-"));
+    let code = await cli(["mcp", "add", "test", process.execPath, MCP_SERVER]);
+    expect(code).toBe(0);
+    code = await cli(["mcp", "list"]);
+    expect(code).toBe(0);
+    code = await cli(["mcp", "remove", "test"]);
+    expect(code).toBe(0);
+    code = await cli(["mcp", "list"]);
+    expect(code).toBe(0);
+  });
+
+  it("mcp test connects and lists tools", async () => {
+    process.env.MYAGENT_HOME = await mkdtemp(join(tmpdir(), "myagent-cli-"));
+    let code = await cli(["mcp", "add", "test", process.execPath, MCP_SERVER]);
+    expect(code).toBe(0);
+    const code2 = await cli(["mcp", "test", "test"]);
+    expect(code2).toBe(0);
   });
 });
