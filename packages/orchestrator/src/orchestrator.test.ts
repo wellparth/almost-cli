@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AgentEvent, ModelProvider } from "@almost/agent-core";
 import type { ToolExecutor } from "@almost/agent-runtime";
 import type { AgentDefinition } from "@almost/agents";
@@ -198,5 +198,29 @@ describe("Orchestrator", () => {
     expect(outcomes.get("t1")?.status).toBe("failed");
     expect(outcomes.get("t1")?.error).toBe("provider down");
     expect(busEvents.some((e) => e.type === "TaskFailed")).toBe(true);
+  });
+
+  it("scopes the tool executor to the per-task workspace", async () => {
+    let calledWith: string | undefined;
+    const base = fakeExecutor();
+    const scopedTo = vi.fn((root: string): ToolExecutor => {
+      calledWith = root;
+      return base;
+    });
+    const executor = { ...base, scoped: scopedTo } as unknown as ToolExecutor;
+
+    const orchestrator = new Orchestrator({
+      provider: fakeProvider,
+      agent,
+      executor,
+      workspaceFor: (task) => (task.id === "t1" ? "/tmp/wt/t1" : undefined),
+    });
+    const graph = new TaskGraph()
+      .addTask({ id: "t1", agentId: "coding", input: "hi", dependencies: [] })
+      .addTask({ id: "t2", agentId: "coding", input: "hi", dependencies: [] });
+    const { outcomes } = await orchestrator.run(graph);
+    expect(outcomes.get("t1")?.status).toBe("completed");
+    expect(scopedTo).toHaveBeenCalledWith("/tmp/wt/t1");
+    expect(calledWith).toBe("/tmp/wt/t1");
   });
 });
