@@ -23,9 +23,9 @@ Session store, event log, CLI session persistence, config + credentials storage.
 
 Built-in coding agent definition: system prompt, tool set, permission defaults, myagent CLI (`run`, REPL, `init`, `auth`, `models`, `config`, `sessions`). (`@almost/agents`, `apps/cli`, CI checks; PR #19; issue #5)
 
-## Phase 5 — Orchestrator
+## Phase 5 — Orchestrator ✅
 
-Task graph, dependency resolver, scheduler, agent state, event bus, failure handling. (issue #6 — next)
+Task graph, dependency resolver, scheduler, event bus, task outcomes and failure handling (failures cancel descendants). (`@almost/orchestrator`; PR #22; issue #6)
 
 ## Phase 6 — Parallel Agents
 
