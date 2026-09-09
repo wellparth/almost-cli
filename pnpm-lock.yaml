@@ -215,6 +215,9 @@ importers:
       '@almost/agent-core':
         specifier: workspace:*
         version: link:../../agent-core
+      '@almost/providers-core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       tsup:
         specifier: ^8.3.5

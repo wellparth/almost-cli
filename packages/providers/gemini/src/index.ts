@@ -9,6 +9,7 @@ import type {
   ToolDefinition,
   Usage,
 } from "@almost/agent-core";
+import { parseSSE } from "@almost/providers-core";
 
 export const GEMINI_API_KEY_ENV = "GEMINI_API_KEY";
 export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
@@ -21,7 +22,7 @@ interface GeminiFunctionCall {
 interface GeminiPart {
   text?: string;
   functionCall?: GeminiFunctionCall;
-  functionResponse?: { name: string; response: { name: string; content: unknown } };
+  functionResponse?: { name: string; response: { result: unknown } };
 }
 
 interface GeminiContent {
@@ -93,10 +94,16 @@ export class GeminiProvider implements ModelProvider {
     }
 
     const system = request.system;
+    const callNameById = new Map<string, string>();
+    for (const m of request.messages) {
+      if (m.role === "assistant") {
+        for (const call of m.toolCalls ?? []) callNameById.set(call.id, call.name);
+      }
+    }
     const contents: GeminiContent[] = [];
     for (const m of request.messages) {
       if (m.role === "system") continue;
-      contents.push(toGeminiContent(m));
+      contents.push(toGeminiContent(m, callNameById));
     }
 
     const body: Record<string, unknown> = {
@@ -137,35 +144,17 @@ export class GeminiProvider implements ModelProvider {
     }
 
     let callId = 0;
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let idx: number;
-        while ((idx = buffer.indexOf("\n\n")) !== -1) {
-          const chunk = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
-          for (const line of chunk.split("\n")) {
-            if (!line.startsWith("data:")) continue;
-            const data = line.slice(5).trim();
-            if (!data || data === "[DONE]") continue;
-            let parsed: GeminiResponse;
-            try {
-              parsed = JSON.parse(data) as GeminiResponse;
-            } catch {
-              continue;
-            }
-            const events = this.#mapChunk(parsed, request.model, ++callId);
-            for (const event of events) yield event;
-          }
-        }
+    for await (const data of parseSSE(res.body)) {
+      if (data === "[DONE]") continue;
+      let parsed: GeminiResponse;
+      try {
+        parsed = JSON.parse(data) as GeminiResponse;
+      } catch {
+        continue;
       }
-    } finally {
-      reader.releaseLock();
+      for (const event of this.#mapChunk(parsed, request.model, ++callId)) {
+        yield event;
+      }
     }
   }
 
@@ -180,7 +169,7 @@ export class GeminiProvider implements ModelProvider {
         if (part.functionCall) {
           events.push({
             type: "TOOL_CALL",
-            id: `gemini_${callId}`,
+            id: `gemini_${callId}_${events.filter((e) => e.type === "TOOL_CALL").length}`,
             name: part.functionCall.name,
             input: part.functionCall.args,
           });
@@ -202,7 +191,7 @@ export class GeminiProvider implements ModelProvider {
   }
 }
 
-function toGeminiContent(message: Message): GeminiContent {
+function toGeminiContent(message: Message, callNameById: Map<string, string>): GeminiContent {
   if (message.role === "user") {
     const text = Array.isArray(message.content)
       ? message.content
@@ -225,7 +214,14 @@ function toGeminiContent(message: Message): GeminiContent {
   if (message.role === "tool") {
     return {
       role: "function",
-      parts: [{ functionResponse: { name: "", response: { name: "", content: message.content } } }],
+      parts: [
+        {
+          functionResponse: {
+            name: callNameById.get(message.toolCallId) ?? "unknown",
+            response: { result: message.content },
+          },
+        },
+      ],
     };
   }
   return { role: "user", parts: [{ text: message.content }] };

@@ -19,7 +19,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@almost/agent-core": "workspace:*"
+    "@almost/agent-core": "workspace:*",
+    "@almost/providers-core": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.3.5",
