@@ -39,10 +39,10 @@ Concurrent execution, resource locks (keyed FIFO mutex), git-worktree task isola
 
 Hand-rolled JSON-RPC 2.0 stdio MCP client (Content-Length framing, initialize handshake, tool discovery/calling), `mcp.json` server config, multi-server manager with permission-gated tools (deny by default), CLI `mcp add`/`list`/`remove`/`test`. (`@almost/mcp`, `apps/cli`; PR #25; issue #9)
 
-## Phase 9 — Security Hardening
+## Phase 9 — Security Hardening ✅
 
 Prompt injection defense, sandboxing, secret protection, audit logs, network controls. (issue #10)
 
-## Phase 10 — Advanced Agent Runtime
+## Phase 10 — Advanced Agent Runtime ✅
 
-Subagents, model routing, agent delegation, adaptive workflows, parallel planning. (issue #11)
+Subagents,  model routing,  agent delegation,  adaptive workflows,  parallel planning. (issue #11)
