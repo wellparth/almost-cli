@@ -286,7 +286,7 @@ export default function App() {
       }
       setCredentialValue("");
       credentialBuf.current = "";
-      setCredentialPrompt({ envVar: envVars[0]!, label: `API key for ${providerId}` });
+      setCredentialPrompt({ envVar: envVars[0]!, label: `API key for ${providerId} (${envVars[0]})` });
       return;
     }
     appendMessage(newMessage("system", `${providerId} API key found — choosing a model`));
