@@ -2,19 +2,21 @@ import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import type { AppState } from "@almost/storage";
 import { openStorage, defaultPaths } from "@almost/storage";
-import { buildRunner, injectCredentials } from "../runner.js";
+import { createBuiltinRegistry } from "@almost/providers";
+import { buildRunner, injectCredentials, providerAuthEnvNames } from "../runner.js";
 import type { Runner } from "../runner.js";
 import { executeRun, persistTurn } from "../repl.js";
 import { openPersistence } from "../persistence.js";
 import type { SessionPersistence } from "../persistence.js";
 import { ChatPane } from "./ChatPane.js";
-import { InputPane } from "./InputPane.js";
+import { InputPane, type Suggestion } from "./InputPane.js";
+import { PromptPane } from "./PromptPane.js";
 import { StatusBar } from "./StatusBar.js";
 import { newMessage, type Message } from "./state.js";
 import { resolveTheme, type Theme } from "./themes.js";
 import { loadTuiConfig, DEFAULT_TUI_CONFIG, type TuiConfig } from "./config.js";
 import { resolveLeaderAction, type LeaderAction } from "./keybinds.js";
-import { isSlashCommand, isAppCommand, commandName, runSlashCommand, type PickerItem } from "./commands.js";
+import { isSlashCommand, isAppCommand, commandName, slashToken, runSlashCommand, COMMAND_HELP, type PickerItem } from "./commands.js";
 import { fileRefToken, suggestFiles } from "./files.js";
 import { PickerPane, type PickerState } from "./PickerPane.js";
 
@@ -22,13 +24,15 @@ export default function App() {
   const { exit } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [leadingAction, setLeadingAction] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [thinking, setThinking] = useState(true);
   const [details, setDetails] = useState(false);
   const [pickerState, setPickerState] = useState<PickerState | null>(null);
+  const [credentialPrompt, setCredentialPrompt] = useState<{ envVar: string; label: string } | null>(null);
+  const [credentialValue, setCredentialValue] = useState("");
 
   const [state, setState] = useState<AppState | undefined>(undefined);
   const [runner, setRunner] = useState<Runner | undefined>(undefined);
@@ -47,6 +51,8 @@ export default function App() {
   const streamBuf = useRef("");
   const reasoningBuf = useRef("");
   const suggestionRevision = useRef(0);
+  const credentialBuf = useRef("");
+  const pendingOnboardingDone = useRef(false);
 
   useEffect(() => {
     void loadTuiConfig().then((cfg) => {
@@ -91,14 +97,33 @@ export default function App() {
 
   const refreshSuggestions = (value: string): void => {
     const token = fileRefToken(value);
-    if (token === undefined) {
+    const slash = slashToken(value);
+    if (!token && !slash && suggestions.length > 0) {
       setSuggestions([]);
       return;
     }
+    if (!token && !slash) return;
     const revision = ++suggestionRevision.current;
+    if (slash) {
+      const entries = Object.entries(COMMAND_HELP)
+        .filter(([cmd]) => cmd.startsWith(slash))
+        .sort((a, b) => {
+          const exactA = a[0] === slash ? 0 : 1;
+          const exactB = b[0] === slash ? 0 : 1;
+          return exactA - exactB || a[0].localeCompare(b[0]);
+        });
+      if (revision === suggestionRevision.current && promptRef.current === value) {
+        setSuggestions(entries.map(([cmd, hint]) => ({ value: cmd.split(/\s+/)[0]!, hint })));
+        const exact = entries.findIndex(([cmd]) => cmd === slash);
+        setSelectedSuggestion(exact >= 0 ? exact : 0);
+      }
+      return;
+    }
     setSelectedSuggestion(0);
-    void suggestFiles(token).then((matches) => {
-      if (revision === suggestionRevision.current && promptRef.current === value) setSuggestions(matches);
+    void suggestFiles(token!).then((matches) => {
+      if (revision === suggestionRevision.current && promptRef.current === value) {
+        setSuggestions(matches.map((m) => ({ value: m })));
+      }
     });
   };
 
@@ -190,6 +215,11 @@ export default function App() {
       appendMessage(newMessage("error", "storage not initialized yet"));
       return;
     }
+    if (head === "/connect" || head === "--connect") {
+      const parts = input.trim().split(/\s+/);
+      await startConnectFlow(parts.length > 1 ? parts[1] : undefined);
+      return;
+    }
     if (head === "/help") {
       setMessages([]);
     }
@@ -205,7 +235,62 @@ export default function App() {
 
   const selectPickerItem = (item: PickerItem): void => {
     setPickerState(null);
-    void runSlash(item.action);
+    void runSlash(item.action).then(() => {
+      if (pendingOnboardingDone.current) {
+        pendingOnboardingDone.current = false;
+        appendMessage(newMessage("system", "onboarding complete — you're all set. type a message to start."));
+      }
+    });
+  };
+
+  const openModelPicker = async (): Promise<void> => {
+    if (!state) return;
+    const result = await runSlashCommand("/models", state);
+    if (!result.picker || result.picker.length === 0) {
+      appendMessage(newMessage("system", [result.title ?? "Models", ...result.lines].join("\n")));
+      return;
+    }
+    pendingOnboardingDone.current = true;
+    setPickerState({ title: result.title ?? "Select a model", items: result.picker, selected: 0 });
+  };
+
+  const startConnectFlow = async (providerId?: string): Promise<void> => {
+    if (!state) {
+      appendMessage(newMessage("error", "storage not ready"));
+      return;
+    }
+    const registry = createBuiltinRegistry();
+    if (!providerId) {
+      const result = await runSlashCommand("/connect", state);
+      if (result.picker && result.picker.length > 0) {
+        setPickerState({ title: result.title ?? "Providers", items: result.picker, selected: 0 });
+      } else {
+        appendMessage(newMessage("system", [result.title ?? "Providers", ...result.lines].join("\n")));
+      }
+      return;
+    }
+    if (!registry.has(providerId)) {
+      appendMessage(newMessage("error", `unknown provider '${providerId}' (available: ${registry.ids().join(", ")})`));
+      return;
+    }
+    state.config.set("defaultProvider", providerId);
+    await state.config.save();
+    refreshLabels();
+    const envVars = providerAuthEnvNames(providerId);
+    const hasKey = envVars.some((n) => state.credentials.resolve(n) !== undefined);
+    if (!hasKey) {
+      if (envVars.length === 0) {
+        appendMessage(newMessage("system", `connected to ${providerId} (no API key needed)`));
+        await openModelPicker();
+        return;
+      }
+      setCredentialValue("");
+      credentialBuf.current = "";
+      setCredentialPrompt({ envVar: envVars[0]!, label: `API key for ${providerId}` });
+      return;
+    }
+    appendMessage(newMessage("system", `${providerId} API key found — choosing a model`));
+    await openModelPicker();
   };
 
   const refreshLabels = (): void => {
@@ -285,10 +370,15 @@ export default function App() {
 
   const completeSuggestion = (): void => {
     const p = promptRef.current;
+    const suggestion = suggestions[selectedSuggestion] ?? suggestions[0];
+    if (!suggestion) return;
+    if (slashToken(p) !== undefined) {
+      setPromptBoth(suggestion.value + " ");
+      return;
+    }
     const idx = p.lastIndexOf("@");
-    if (idx < 0 || suggestions.length === 0) return;
-    const target = (suggestions[selectedSuggestion] ?? suggestions[0])?.replace(/\/$/, "");
-    if (!target) return;
+    if (idx < 0) return;
+    const target = suggestion.value.replace(/\/$/, "");
     setPromptBoth(p.slice(0, idx + 1) + target + " ");
   };
 
@@ -299,6 +389,42 @@ export default function App() {
 
   useInput(
     (input, key) => {
+      if (credentialPrompt) {
+        (async () => {
+          if (key.escape || (key.ctrl && input.toLowerCase() === "c")) {
+            setCredentialPrompt(null);
+            credentialBuf.current = "";
+            setCredentialValue("");
+            appendMessage(newMessage("system", "connect canceled"));
+            return;
+          }
+          if (key.return) {
+            const value = credentialBuf.current.trim();
+            if (!value || !state) return;
+            state.credentials.set(credentialPrompt.envVar, value);
+            await state.credentials.save();
+            setCredentialPrompt(null);
+            credentialBuf.current = "";
+            setCredentialValue("");
+            appendMessage(newMessage("system", `saved ${credentialPrompt.envVar}`));
+            await openModelPicker();
+            return;
+          }
+          if (key.backspace) {
+            const next = credentialBuf.current.slice(0, -1);
+            credentialBuf.current = next;
+            setCredentialValue(next);
+            return;
+          }
+          if (key.upArrow || key.downArrow || key.leftArrow || key.rightArrow || key.tab) return;
+          if (input && input.length > 0) {
+            const next = credentialBuf.current + input;
+            credentialBuf.current = next;
+            setCredentialValue(next);
+          }
+        })();
+        return;
+      }
       if (pickerState) {
         if (key.upArrow || key.downArrow) {
           setPickerState((p) => (p ? { ...p, selected: Math.max(0, Math.min(p.items.length - 1, p.selected + (key.upArrow ? -1 : 1))) } : p));
@@ -332,6 +458,16 @@ export default function App() {
         return;
       }
       if (key.return) {
+        const slash = slashToken(promptRef.current);
+        if (slash !== undefined && suggestions.length > 0) {
+          const picked = suggestions[selectedSuggestion] ?? suggestions[0];
+          if (picked) {
+            appendMessage(newMessage("user", picked.value));
+            void runSlash(picked.value);
+            setPromptBoth("");
+          }
+          return;
+        }
         void handleSubmit(promptRef.current);
         return;
       }
@@ -377,6 +513,9 @@ export default function App() {
         <ChatPane messages={messages} theme={theme} />
       </Box>
       {pickerState ? <PickerPane picker={pickerState} theme={theme} /> : null}
+      {credentialPrompt ? (
+        <PromptPane title="Connect" label={credentialPrompt.label} value={credentialValue} secret theme={theme} />
+      ) : null}
       <InputPane
         prompt={prompt}
         submitting={submitting}

@@ -1,11 +1,16 @@
 import { Box, Text } from "ink";
 import type { Theme } from "./themes.js";
 
+export interface Suggestion {
+  value: string;
+  hint?: string;
+}
+
 export interface InputPaneProps {
   prompt: string;
   submitting: boolean;
   leadingAction: boolean;
-  suggestions: string[];
+  suggestions: Suggestion[];
   selectedSuggestion: number;
   theme: Theme;
 }
@@ -35,10 +40,17 @@ export function InputPane({
       {showSuggestions ? (
         <Box flexDirection="column" marginTop={1}>
           {suggestions.map((suggestion, index) => (
-            <Text key={suggestion} color={index === selectedSuggestion ? theme.accent : theme.muted} bold={index === selectedSuggestion}>
-              {index === selectedSuggestion ? "› " : "  "}
-              {suggestion}
-            </Text>
+            <Box key={suggestion.value}>
+              <Text color={index === selectedSuggestion ? theme.accent : theme.muted} bold={index === selectedSuggestion}>
+                {index === selectedSuggestion ? "› " : "  "}
+              </Text>
+              <Text color={index === selectedSuggestion ? theme.accent : theme.prompt}>
+                {suggestion.value}
+              </Text>
+              {suggestion.hint ? (
+                <Text color={theme.muted}>  {suggestion.hint.slice(0, 48)}</Text>
+              ) : null}
+            </Box>
           ))}
         </Box>
       ) : null}

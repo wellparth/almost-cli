@@ -27,14 +27,11 @@ export const COMMAND_HELP: Record<string, string> = {
   "/thinking": "toggle reasoning visibility",
   "/details": "toggle tool execution details",
   "/agents": "list agents (built-in + custom)",
-  "/models [provider]": "list available models",
-  "/config get <key>": "read config (default-provider, default-model, agent)",
-  "/config set <key> <value>": "write config",
-  "/sessions": "list sessions",
-  "/sessions show <id>": "show a session",
-  "/sessions rm <id>": "delete a session",
+  "/models [provider]": "list available models for default provider",
+  "/config": "config — get <key> | set <key> <value>",
+  "/sessions": "sessions — show <id> | rm <id>",
   "/auth": "list stored credentials (names only)",
-  "/connect [provider]": "list providers + auth status, or set default-provider",
+  "/connect [provider]": "connect a provider (API key prompt + model picker)",
   "/skill [name]": "list local skills, or show a skill's details",
   "/mcp": "list configured MCP servers",
 };
@@ -52,6 +49,13 @@ export function isAppCommand(input: string): boolean {
 
 export function commandName(input: string): string {
   return (input.trim().split(/\s+/)[0] ?? "").toLowerCase();
+}
+
+/** Extract a leading `/command` token being typed (drives the command palette). */
+export function slashToken(value: string): string | undefined {
+  if (!value.startsWith("/")) return undefined;
+  const last = value.split(/\s+/).pop() ?? "";
+  return last.startsWith("/") && last.length > 0 ? last : undefined;
 }
 
 async function registryFor(state: AppState): Promise<AgentRegistry> {
