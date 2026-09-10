@@ -94,29 +94,43 @@ describe("ui/commands", () => {
     });
   });
 
-  it("/skill lists and inspects skills from SKILL.md", async () => {
-    const skillsDir = await mkdtemp(join(tmpdir(), "myagent-skills-"));
-    await mkdir(join(skillsDir, "banner-design"), { recursive: true });
-    await writeFile(
-      join(skillsDir, "banner-design", "SKILL.md"),
-      `---
-name: banner-design
-description: Design banners for social media and print.
----
+  it("provides interactive pickers for no-arg list commands", async () => {
+    process.env.MYAGENT_HOME = await mkdtemp(join(tmpdir(), "myagent-ui-"));
+    const state = await openStorage(defaultPaths());
 
-Workflow notes…
-`,
-    );
-    process.env.MYAGENT_SKILLS_DIR = skillsDir;
+    const agents = await runSlashCommand("/agents", state);
+    expect(agents.picker?.length).toBeGreaterThan(0);
+    expect(agents.picker?.[0]?.action).toMatch(/^\/config set agent /);
 
-    const all = await listSkills();
-    expect(all.some((s) => s.name === "banner-design")).toBe(true);
+    const models = await runSlashCommand("/models", state);
+    expect(models.picker).toBeUndefined();
+    expect(models.lines.join(" ")).toContain("no provider configured");
 
-    const listed = await runSlashCommand("/skill", {} as never);
-    expect(listed.lines.join("\n")).toContain("banner-design");
+    const connect = await runSlashCommand("/connect", state);
+    expect(connect.picker?.some((i) => i.label.startsWith("openai"))).toBe(true);
+
+    const sessions = await runSlashCommand("/sessions", state);
+    expect(sessions.lines.join(" ")).toBe("no sessions");
+
+    const skillDir = await mkdtemp(join(tmpdir(), "myagent-skills-"));
+    await mkdir(join(skillDir, "banner-design"), { recursive: true });
+    await writeFile(join(skillDir, "banner-design", "SKILL.md"), "---\nname: banner-design\ndescription: Make banners.\n---\n");
+    process.env.MYAGENT_SKILLS_DIR = skillDir;
+    const skills = await runSlashCommand("/skill", {} as never);
+    expect(skills.picker?.some((i) => i.label === "banner-design")).toBe(true);
 
     const detail = await runSlashCommand("/skill banner-design", {} as never);
-    expect(detail.lines.join("\n")).toContain("Design banners for social media");
+    expect(detail.lines.join("\n")).toContain("Make banners.");
+  });
+
+  it("/sessions returns a picker when sessions exist", async () => {
+    process.env.MYAGENT_HOME = await mkdtemp(join(tmpdir(), "myagent-ui-"));
+    const state = await openStorage(defaultPaths());
+    await state.sessions.create({ cwd: "/tmp" });
+
+    const sessions = await runSlashCommand("/sessions", state);
+    expect(sessions.picker?.length).toBe(1);
+    expect(sessions.picker?.[0]?.action).toMatch(/^\/sessions show session-/);
   });
 });
 

@@ -6,9 +6,17 @@ import { listModelsFor, providerAuthEnvNames } from "../runner.js";
 import { listSkills, findSkill, skillRoots } from "./skills.js";
 import path from "node:path";
 
+export interface PickerItem {
+  label: string;
+  hint?: string;
+  action: string;
+}
+
 export interface SlashResult {
   title?: string;
   lines: string[];
+  /** When set, the TUI renders an interactive picker for `lines[0]` choices. */
+  picker?: PickerItem[];
 }
 
 export const COMMAND_HELP: Record<string, string> = {
@@ -59,21 +67,36 @@ async function runAgents(state: AppState): Promise<SlashResult> {
   const registry = await registryFor(state);
   const agents = await registry.listAgents();
   if (agents.length === 0) return { lines: ["no agents"] };
-  const lines = agents.map((agent) => `- ${agent.id}  ${agent.name}  tools: ${agent.tools.map((t) => t.name).join(", ")}`);
-  return { title: `Agents (${agents.length})`, lines };
+  const current = state.config.get("agent") ?? "coding";
+  const lines = agents.map((agent) => {
+    const mark = agent.id === current ? "  [current]" : "";
+    return `- ${agent.id}  ${agent.name}  tools: ${agent.tools.map((t) => t.name).join(", ")}${mark}`;
+  });
+  const picker = agents.map((agent) => ({
+    label: agent.id + (agent.id === current ? "  ●" : ""),
+    hint: agent.name,
+    action: `/config set agent ${agent.id}`,
+  }));
+  return { title: `Agents (${agents.length})`, lines, picker };
 }
 
 async function runModels(state: AppState, rest: string[]): Promise<SlashResult> {
   const providerId = rest[0];
+  const registry = createBuiltinRegistry();
   const provider = (() => {
-    const registry = createBuiltinRegistry();
     const id = providerId ?? state.config.get("defaultProvider");
-    return registry.get(id ?? "");
+    return id ? registry.get(id) : undefined;
   })();
   if (!provider) return { title: "Models", lines: ["(no provider configured; run /config set default-provider <id>)"] };
   const models = await listModelsFor(state, providerId);
   if (models.length === 0) return { title: `${provider.id} models`, lines: ["  (model listing not available)"] };
-  return { title: `${provider.id} models`, lines: models.map((m) => `- ${m}`) };
+  const current = state.config.get("defaultModel");
+  const lines = models.map((m) => `- ${m}${m === current ? "  [current]" : ""}`);
+  const picker = models.map((m) => ({
+    label: m + (m === current ? "  ●" : ""),
+    action: `/config set default-model ${m}`,
+  }));
+  return { title: `${provider.id} models`, lines, picker };
 }
 
 const CONFIG_KEYS = ["default-provider", "default-model", "agent"] as const;
@@ -131,7 +154,12 @@ async function runSessions(state: AppState, rest: string[]): Promise<SlashResult
   const list = await state.sessions.list();
   if (list.length === 0) return { title: "Sessions", lines: ["no sessions"] };
   const lines = list.map((meta) => `- ${meta.id}  ${meta.cwd ?? ""}  (${new Date(meta.updatedAt).toISOString()})`);
-  return { title: `Sessions (${list.length})`, lines };
+  const picker = list.map((meta) => ({
+    label: meta.id,
+    hint: `${meta.cwd ?? ""}  ${new Date(meta.updatedAt).toLocaleString()}`,
+    action: `/sessions show ${meta.id}`,
+  }));
+  return { title: `Sessions (${list.length})`, lines, picker };
 }
 
 async function runAuth(state: AppState): Promise<SlashResult> {
@@ -175,7 +203,12 @@ async function runConnect(state: AppState, rest: string[]): Promise<SlashResult>
     const current = state.config.get("defaultProvider") === id ? "  [default]" : "";
     return `- ${id}  ${status}${current}${env}`;
   });
-  return { title: "Providers", lines };
+  const picker = registry.ids().map((id) => ({
+    label: id + (state.config.get("defaultProvider") === id ? "  ●" : ""),
+    hint: providerOk(state, id) ? "connected" : "missing key",
+    action: `/connect ${id}`,
+  }));
+  return { title: "Providers", lines, picker };
 }
 
 async function runSkill(rest: string[]): Promise<SlashResult> {
@@ -195,7 +228,12 @@ async function runSkill(rest: string[]): Promise<SlashResult> {
   const skills = await listSkills();
   if (skills.length === 0) return { title: "Skills", lines: ["no skills found", "  scanned: " + skillRootsForHelp()] };
   const lines = skills.map((s) => `- ${s.name}  ${s.description.split("\n")[0] ?? ""}`.slice(0, 160));
-  return { title: `Skills (${skills.length})`, lines };
+  const picker = skills.map((s) => ({
+    label: s.name,
+    hint: (s.description.split("\n")[0] ?? "").slice(0, 60),
+    action: `/skill ${s.name}`,
+  }));
+  return { title: `Skills (${skills.length})`, lines, picker };
 }
 
 function skillRootsForHelp(): string {

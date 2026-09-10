@@ -14,8 +14,9 @@ import { newMessage, type Message } from "./state.js";
 import { resolveTheme, type Theme } from "./themes.js";
 import { loadTuiConfig, DEFAULT_TUI_CONFIG, type TuiConfig } from "./config.js";
 import { resolveLeaderAction, type LeaderAction } from "./keybinds.js";
-import { isSlashCommand, isAppCommand, commandName, runSlashCommand } from "./commands.js";
+import { isSlashCommand, isAppCommand, commandName, runSlashCommand, type PickerItem } from "./commands.js";
 import { fileRefToken, suggestFiles } from "./files.js";
+import { PickerPane, type PickerState } from "./PickerPane.js";
 
 export default function App() {
   const { exit } = useApp();
@@ -27,6 +28,7 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [thinking, setThinking] = useState(true);
   const [details, setDetails] = useState(false);
+  const [pickerState, setPickerState] = useState<PickerState | null>(null);
 
   const [state, setState] = useState<AppState | undefined>(undefined);
   const [runner, setRunner] = useState<Runner | undefined>(undefined);
@@ -192,8 +194,26 @@ export default function App() {
       setMessages([]);
     }
     const result = await runSlashCommand(input, state);
+    if (result.picker && result.picker.length > 0) {
+      setPickerState({ title: result.title ?? "Select", items: result.picker, selected: 0 });
+      return;
+    }
     const lines = result.title ? [result.title, ...result.lines] : result.lines;
     appendMessage(newMessage("system", lines.join("\n")));
+    if (head === "/config" || head === "/connect") refreshLabels();
+  };
+
+  const selectPickerItem = (item: PickerItem): void => {
+    setPickerState(null);
+    void runSlash(item.action);
+  };
+
+  const refreshLabels = (): void => {
+    if (!state) return;
+    const all = (state.config as unknown as { all(): Record<string, string> }).all();
+    setAgentLabel(all.agent ?? agentLabel);
+    setProviderLabel(all.defaultProvider ?? providerLabel);
+    setModelLabel(all.defaultModel ?? modelLabel);
   };
 
   const handleShell = (command: string): void => {
@@ -279,6 +299,24 @@ export default function App() {
 
   useInput(
     (input, key) => {
+      if (pickerState) {
+        if (key.upArrow || key.downArrow) {
+          setPickerState((p) => (p ? { ...p, selected: Math.max(0, Math.min(p.items.length - 1, p.selected + (key.upArrow ? -1 : 1))) } : p));
+          return;
+        }
+        if (key.return) {
+          setPickerState((p) => {
+            if (p) selectPickerItem(p.items[p.selected] ?? p.items[0]!);
+            return p;
+          });
+          return;
+        }
+        if (key.escape || (key.ctrl && input.toLowerCase() === "c")) {
+          setPickerState(null);
+          return;
+        }
+        return;
+      }
       if (leadingAction) {
         setLeadingAction(false);
         const action = resolveLeaderAction(config ?? DEFAULT_TUI_CONFIG, input || "");
@@ -338,6 +376,7 @@ export default function App() {
       <Box flexGrow={1} flexDirection="column">
         <ChatPane messages={messages} theme={theme} />
       </Box>
+      {pickerState ? <PickerPane picker={pickerState} theme={theme} /> : null}
       <InputPane
         prompt={prompt}
         submitting={submitting}
