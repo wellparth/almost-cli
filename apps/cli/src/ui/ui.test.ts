@@ -5,9 +5,10 @@ import { DEFAULT_TUI_CONFIG } from "./config.js";
 import { fileRefToken, suggestFiles } from "./files.js";
 import { runSlashCommand, isSlashCommand, isAppCommand, commandName, COMMAND_HELP } from "./commands.js";
 import { openStorage, defaultPaths } from "@almost/storage";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseSkillFrontmatter, listSkills } from "./skills.js";
 
 describe("ui/state", () => {
   it("creates unique messages with roles", () => {
@@ -74,5 +75,55 @@ describe("ui/commands", () => {
 
     const unknown = await runSlashCommand("/nope", state);
     expect(unknown.title).toBe("Unknown command");
+  });
+
+  it("/connect lists providers and sets default-provider", async () => {
+    process.env.MYAGENT_HOME = await mkdtemp(join(tmpdir(), "myagent-ui-"));
+    const state = await openStorage(defaultPaths());
+
+    const list = await runSlashCommand("/connect", state);
+    expect(list.title).toBe("Providers");
+    expect(list.lines.join("\n")).toContain("openai");
+
+    const set = await runSlashCommand("/connect openai", state);
+    expect(state.config.get("defaultProvider")).toBe("openai");
+    expect(set.lines.join(" ")).toContain("no API key found");
+
+    await expect(runSlashCommand("/connect not-real", state)).resolves.toMatchObject({
+      title: "Connect",
+    });
+  });
+
+  it("/skill lists and inspects skills from SKILL.md", async () => {
+    const skillsDir = await mkdtemp(join(tmpdir(), "myagent-skills-"));
+    await mkdir(join(skillsDir, "banner-design"), { recursive: true });
+    await writeFile(
+      join(skillsDir, "banner-design", "SKILL.md"),
+      `---
+name: banner-design
+description: Design banners for social media and print.
+---
+
+Workflow notes…
+`,
+    );
+    process.env.MYAGENT_SKILLS_DIR = skillsDir;
+
+    const all = await listSkills();
+    expect(all.some((s) => s.name === "banner-design")).toBe(true);
+
+    const listed = await runSlashCommand("/skill", {} as never);
+    expect(listed.lines.join("\n")).toContain("banner-design");
+
+    const detail = await runSlashCommand("/skill banner-design", {} as never);
+    expect(detail.lines.join("\n")).toContain("Design banners for social media");
+  });
+});
+
+describe("ui/skills", () => {
+  it("parses SKILL.md frontmatter", () => {
+    const raw = "---\nname: foo\n description:  Bar baz\n---\n# Content\n";
+    expect(parseSkillFrontmatter(raw, "fallback")).toEqual({ name: "foo", description: "Bar baz" });
+    expect(parseSkillFrontmatter("no frontmatter", "fallback").name).toBeUndefined();
   });
 });

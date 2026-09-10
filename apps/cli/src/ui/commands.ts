@@ -2,7 +2,8 @@
 import type { AppState } from "@almost/storage";
 import { AgentRegistry } from "@almost/agents";
 import { createBuiltinRegistry } from "@almost/providers";
-import { listModelsFor } from "../runner.js";
+import { listModelsFor, providerAuthEnvNames } from "../runner.js";
+import { listSkills, findSkill, skillRoots } from "./skills.js";
 import path from "node:path";
 
 export interface SlashResult {
@@ -25,6 +26,8 @@ export const COMMAND_HELP: Record<string, string> = {
   "/sessions show <id>": "show a session",
   "/sessions rm <id>": "delete a session",
   "/auth": "list stored credentials (names only)",
+  "/connect [provider]": "list providers + auth status, or set default-provider",
+  "/skill [name]": "list local skills, or show a skill's details",
   "/mcp": "list configured MCP servers",
 };
 
@@ -137,6 +140,68 @@ async function runAuth(state: AppState): Promise<SlashResult> {
   return { title: "Stored credentials", lines: names.map((n) => `- ${n}`) };
 }
 
+function providerOk(state: AppState, providerId: string): boolean {
+  const names = providerAuthEnvNames(providerId);
+  return names.some((n) => state.credentials.resolve(n) !== undefined || process.env[n] !== undefined);
+}
+
+async function runConnect(state: AppState, rest: string[]): Promise<SlashResult> {
+  const registry = createBuiltinRegistry();
+  const target = rest[0];
+  if (target) {
+    if (!registry.has(target)) {
+      return { title: "Connect", lines: [`unknown provider '${target}' (available: ${registry.ids().join(", ")})`] };
+    }
+    state.config.set("defaultProvider", target);
+    await state.config.save();
+    const envVars = providerAuthEnvNames(target);
+    if (providerOk(state, target)) {
+      return { title: "Connect", lines: [`${target} is connected and set as default provider.`] };
+    }
+    const hint = envVars.length > 0 ? `export ${envVars.join(" or ")} then run: myagent auth set ${envVars[0]}` : "no env var known";
+    return {
+      title: "Connect",
+      lines: [
+        `${target} set as default provider, but no API key found.`,
+        `  ${hint}`,
+        `  or run /auth to check stored credentials.`,
+      ],
+    };
+  }
+  const lines = registry.ids().map((id) => {
+    const envVars = providerAuthEnvNames(id);
+    const status = providerOk(state, id) ? "connected" : "missing key";
+    const env = envVars.length > 0 ? ` (${envVars.join(" / ")})` : "";
+    const current = state.config.get("defaultProvider") === id ? "  [default]" : "";
+    return `- ${id}  ${status}${current}${env}`;
+  });
+  return { title: "Providers", lines };
+}
+
+async function runSkill(rest: string[]): Promise<SlashResult> {
+  const name = rest[0];
+  if (name) {
+    const skill = await findSkill(name);
+    if (!skill) {
+      const all = await listSkills();
+      const available = all.length > 0 ? all.map((s) => s.name).join(", ") : "(none found)";
+      return { title: "Skills", lines: [`no skill '${name}'`, `available: ${available}`] };
+    }
+    return {
+      title: `Skill: ${skill.name}`,
+      lines: [skill.description, skill.description.length > 0 ? "" : "", `  source: ${skill.path}`].filter((l) => l.length > 0),
+    };
+  }
+  const skills = await listSkills();
+  if (skills.length === 0) return { title: "Skills", lines: ["no skills found", "  scanned: " + skillRootsForHelp()] };
+  const lines = skills.map((s) => `- ${s.name}  ${s.description.split("\n")[0] ?? ""}`.slice(0, 160));
+  return { title: `Skills (${skills.length})`, lines };
+}
+
+function skillRootsForHelp(): string {
+  return skillRoots().filter(Boolean).join(", ");
+}
+
 async function runMcp(state: AppState): Promise<SlashResult> {
   const { loadMcpConfig } = await import("@almost/mcp");
   const config = await loadMcpConfig(state.paths.root);
@@ -169,6 +234,12 @@ export async function runSlashCommand(input: string, state: AppState): Promise<S
       return runSessions(state, rest);
     case "/auth":
       return runAuth(state);
+    case "/connect":
+    case "--connect":
+      return runConnect(state, rest);
+    case "/skill":
+    case "--skill":
+      return runSkill(rest);
     case "/mcp":
       return runMcp(state);
     default:
