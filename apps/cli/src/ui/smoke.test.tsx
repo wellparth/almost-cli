@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToString } from "ink";
 import App from "./App.js";
 import { PickerPane } from "./PickerPane.js";
+import { PromptPane } from "./PromptPane.js";
 import { resolveTheme } from "./themes.js";
 
 describe("ui/App smoke", () => {
@@ -30,5 +31,17 @@ describe("ui/PickerPane", () => {
     );
     expect(output).toContain("openai");
     expect(output).toContain("gemini");
+  });
+});
+
+describe("ui/PromptPane", () => {
+  it("renders a masked API-key prompt", async () => {
+    const output = await renderToString(
+      <PromptPane title="Connect" label="API key for openai" value="sk-abc" secret theme={resolveTheme("default")} />,
+      {},
+    );
+    expect(output).toContain("API key for openai");
+    expect(output).not.toContain("sk-abc");
+    expect(output).toContain("******");
   });
 });

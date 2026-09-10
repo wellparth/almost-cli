@@ -3,7 +3,7 @@ import { newMessage } from "./state.js";
 import { resolveLeaderAction } from "./keybinds.js";
 import { DEFAULT_TUI_CONFIG } from "./config.js";
 import { fileRefToken, suggestFiles } from "./files.js";
-import { runSlashCommand, isSlashCommand, isAppCommand, commandName, COMMAND_HELP } from "./commands.js";
+import { runSlashCommand, isSlashCommand, isAppCommand, commandName, slashToken, COMMAND_HELP } from "./commands.js";
 import { openStorage, defaultPaths } from "@almost/storage";
 import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -53,6 +53,20 @@ describe("ui/commands", () => {
     expect(isAppCommand("/new")).toBe(true);
     expect(isAppCommand("/agents")).toBe(false);
     expect(commandName("/config set default-model gpt-4o")).toBe("/config");
+  });
+
+  it("extracts an in-progress slash token for the command palette", () => {
+    expect(slashToken("/")).toBe("/");
+    expect(slashToken("/con")).toBe("/con");
+    expect(slashToken("/connect ")).toBeUndefined();
+    expect(slashToken("/connect openai")).toBeUndefined();
+    expect(slashToken("hello /x")).toBeUndefined();
+  });
+
+  it("palette exposes every /connect and /skill flow entry point", () => {
+    for (const cmd of ["/connect", "/skill", "/models", "/agents", "/sessions", "/auth", "/help"]) {
+      expect(Object.keys(COMMAND_HELP).some((k) => k.startsWith(cmd))).toBe(true);
+    }
   });
 
   it("exposes documented command list", () => {
