@@ -72,6 +72,7 @@ export async function resolveModel(
 export async function buildRunner(options: RunnerOptions): Promise<Runner> {
   const { state, providerId, model: requestedModel, agentId } = options;
   injectCredentials(state);
+  migrateLegacyCredentials(state);
   const provider = resolveProvider(state, providerId);
   const agent = await resolveAgent(state, agentId);
 
@@ -111,9 +112,24 @@ export async function buildRunner(options: RunnerOptions): Promise<Runner> {
 const AUTH_ENV_NAMES: Record<string, string[]> = {
   openai: ["OPENAI_API_KEY"],
   deepseek: ["DEEPSEEK_API_KEY"],
-  nvidia: ["NVIDIA_NIM_API_KEY"],
+  nvidia: ["NVIDIA_API_KEY"],
   gemini: ["GEMINI_API_KEY"],
 };
+
+/** Historical env-var names migrated to their canonical counterparts. */
+const LEGACY_CREDENTIAL_ALIASES: Record<string, string> = {
+  NVIDIA_NIM_API_KEY: "NVIDIA_API_KEY",
+};
+
+export function migrateLegacyCredentials(state: AppState): void {
+  for (const [from, to] of Object.entries(LEGACY_CREDENTIAL_ALIASES)) {
+    const value = state.credentials.get(from);
+    if (value !== undefined && state.credentials.get(to) === undefined) {
+      state.credentials.set(to, value);
+      void state.credentials.save();
+    }
+  }
+}
 
 export function providerAuthEnvNames(providerId: string): string[] {
   return AUTH_ENV_NAMES[providerId] ?? [];
