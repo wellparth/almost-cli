@@ -153,7 +153,7 @@ describe("network tool", () => {
       set: {
         filesystem: { read: true, write: true },
         shell: { execute: true },
-        git: { read: true },
+        git: { read: true, write: true },
       },
     });
     const result = await fetchUrlTool.execute({ url: "https://example.com" }, { workspaceRoot: dir, cwd: dir, permissions: denyNetwork, env: {} });
