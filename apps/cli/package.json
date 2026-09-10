@@ -7,7 +7,9 @@
   "bin": {
     "myagent": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
@@ -21,10 +23,14 @@
     "@almost/permissions": "workspace:*",
     "@almost/providers": "workspace:*",
     "@almost/storage": "workspace:*",
-    "@almost/tools": "workspace:*"
+    "@almost/tools": "workspace:*",
+    "ink": "^7.1.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/react": "^19.2.18",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3",
     "vitest": "^2.1.9"
